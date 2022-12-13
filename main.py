@@ -107,12 +107,10 @@ class Deployable(Pawn):  # гаджетиы - турели/мины и всяк�
 
 
 class Item(pygame.sprite.Sprite):  # предметы лежащие на земле, можно подбирать их
-    # TODO: спрайт-группу поставить
     def __init__(self, *groups):
         super().__init__(*groups)
-        self.image = pygame.Surface([8, 8])  # пока спрайта нет, квадратом заменяю
-        self.image.fill('orange')
-        self.rect = self.image.get_rect(x=16, y=16)
+        self.image = Pawn.image  # тк это базовый класс, его не должно быть в игре
+        self.rect = self.image.get_rect()
         self.pos = None
         self.name = 'PLACEHOLDER'
 
