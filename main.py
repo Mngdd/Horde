@@ -1,6 +1,7 @@
 import os
-import sys
 import random
+import sys
+
 import pygame
 
 pygame.init()
@@ -31,7 +32,7 @@ def load_image(name, colorkey=None):
 class Pawn(pygame.sprite.Sprite):
     image = pygame.transform.scale(load_image("templates/Obsolete.png"), (32, 32))
 
-    def __init__(self, *groups, x, y):
+    def __init__(self, x, y, *groups):
         super().__init__(*groups)
 
         self.image = Pawn.image  # надо же чета вставить
@@ -62,15 +63,15 @@ class Player(Pawn):  # игрок
 
     # желательно без трансформа, просто сделать мелкий спрайт, но пока сойдет
 
-    def __init__(self, *groups, x, y, nick):
-        super().__init__(*groups, x=x, y=y)
+    def __init__(self, x, y, nick, *groups):
+        super().__init__(x, y, *groups)
 
         self.image = Player.image
         self.rect = self.image.get_rect()
 
         self.movementSpeed = 5
         self.pos = [x, y]
-        self.health = 100
+        self.health = 100  # TODO: ИСПОЛЬЗОВАТЬ СКОРОСТЬ ВМЕСТО ПЕРЕМЕЩНИЯ МОМЕНТАЛЬНОГО
         self.alive = True
         self.nick = nick
         # TODO: нужно оружие
@@ -95,8 +96,8 @@ class Player(Pawn):  # игрок
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
-    def __init__(self, *groups, x, y):
-        super().__init__(*groups, x=x, y=y)
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
         self.movementSpeed = 2
         self.pos = [x, y]
         self.health = 100
@@ -105,7 +106,7 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
     def move(self):
         target = [(p, find_vector_len(self.pos, p.pos)) for p in players_group]  # берем живых игроков
         target = sorted(target, key=lambda x: (x[1], x[0].health, x[0].nick))[0][0]  # кого бьем
-        m = 0.1  # к/ф отталкивания при коллизии
+        collision_tolerance = 0.1  # к/ф отталкивания при коллизии
         if target.pos[1] < self.pos[1]:  # TODO: Добавить тут проверку на коллизию(в выбранной точке никого не будет)
             self.pos[1] += -1 * self.movementSpeed
         if target.pos[1] > self.pos[1]:
@@ -121,11 +122,11 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
             if pygame.sprite.collide_rect(self, e):
                 # чтоб не толкать друг в друга, думаем куда толкать
                 go_left, go_up = self.rect.x < e.rect.x, self.rect.y < e.rect.y
-                self.pos[0] -= e.rect.width * m * (1 if go_left else -1)  # толкаем себя
-                self.pos[1] -= e.rect.height * m * (1 if go_up else -1)
+                self.pos[0] -= e.rect.width * collision_tolerance * (1 if go_left else -1)  # толкаем себя
+                self.pos[1] -= e.rect.height * collision_tolerance * (1 if go_up else -1)
                 tmp = list(e.rect.topleft)  # толкаем другого чела
-                tmp[0] += self.rect.width * m * (-1 if go_left else 1)
-                tmp[1] += self.rect.height * m * (-1 if go_up else 1)
+                tmp[0] += self.rect.width * collision_tolerance * (-1 if go_left else 1)
+                tmp[1] += self.rect.height * collision_tolerance * (-1 if go_up else 1)
                 e.rect.topleft = tmp
                 # print('COLLIDIN')
 
@@ -135,18 +136,18 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
 
 
 class Deployable(Pawn):  # гаджетиы - турели/мины и всякое такое что пассивно наносит урон врагам
-    def __init__(self, *groups, x, y):
-        super().__init__(*groups, x=x, y=y)
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
         self.image.fill('cyan')
     # TODO: сделать
 
 
 class Item(pygame.sprite.Sprite):  # предметы лежащие на земле, можно подбирать их
-    def __init__(self, *groups):
+    def __init__(self, x, y, *groups):
         super().__init__(*groups)
         self.image = Pawn.image  # тк это базовый класс, его не должно быть в игре
         self.rect = self.image.get_rect()
-        self.pos = None
+        self.pos = [x, y]
         self.name = 'PLACEHOLDER'
 
         # скорость нужна чтобы предметы разлетались в разные стороны(например при смерти персонажа)
@@ -155,6 +156,18 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
 
     def interact(self):
         pass
+
+
+class Wall(pygame.sprite.Sprite):  # стены, от них наверн никого наследовать не надо
+    image = pygame.transform.scale(load_image("templates/wall.jpg"), (32, 32))
+
+    def __init__(self, x, y, *groups):
+        super().__init__(*groups)
+        self.pos = [x, y]
+        self.image = Wall.image
+        self.rect = self.image.get_rect()
+
+        self.rect.topleft = self.pos
 
 
 class Weapon(pygame.sprite.Sprite):
@@ -192,10 +205,12 @@ def game_loop():
     finish_game = False
 
     # спаун
-    Player(players_group, x=screen.get_width() // 2, y=screen.get_height() // 2, nick='JOHN CENA')
+    Player(screen.get_width() // 2, screen.get_height() // 2, 'JOHN CENA', players_group)
+    for i in range(4):
+        Wall(300 + 32 * i, 120, walls_group)
     for _ in range(6):
-        Enemy(enemies_group, x=random.randint(0, screen.get_width()),
-              y=random.randint(0, screen.get_height()))
+        Enemy(random.randint(0, screen.get_width()),
+              random.randint(0, screen.get_height()), enemies_group)
 
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
@@ -218,6 +233,7 @@ def game_loop():
         enemies_group.draw(screen)
         deployable_group.draw(screen)
         items_group.draw(screen)
+        walls_group.draw(screen)
 
         pygame.display.flip()
         clock.tick(120)
@@ -238,5 +254,6 @@ if __name__ == '__main__':
     enemies_group = pygame.sprite.Group()
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
+    walls_group = pygame.sprite.Group()
 
     main()
