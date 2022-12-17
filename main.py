@@ -32,13 +32,14 @@ def load_image(name, colorkey=None):
 class Pawn(pygame.sprite.Sprite):
     image = pygame.transform.scale(load_image("templates/Obsolete.png"), (32, 32))
 
-    def __init__(self, x, y, *groups):
+    def __init__(self, x: int, y: int, *groups):
         super().__init__(*groups)
 
         self.image = Pawn.image  # надо же чета вставить
         self.rect = self.image.get_rect()
+        self.rect.height = 5  # чтоб за спрайт заходить можно было
 
-        self.pos = (x, y)
+        self.pos = [x, y]  # левый верхний угол всегда
         self.health = 0
         self.alive = False
         self.movement_vector = [0, 0]
@@ -47,9 +48,33 @@ class Pawn(pygame.sprite.Sprite):
         self.available_weapons = []
         self.equipped_weapon = None
         self.inventory = []
+        self.prev_pos = self.pos
 
-    def move(self):
-        pass  # расчет передвижения, этому классу оно незачем
+    def move(self):  # расчет передвижения
+        self.pos[0] += self.movement_vector[0]
+        self.pos[1] += self.movement_vector[1]
+        self.movement_vector = [0, 0]
+
+    def collision_test(self):  # коллизию считаем
+        test_rect_no_x = self.rect.copy()
+        test_rect_no_x.topleft = (self.pos[0], self.pos[1] + self.movement_vector[1])
+        test_rect_no_y = self.rect.copy()
+        test_rect_no_y.topleft = (self.pos[0] + self.movement_vector[0], self.pos[1])
+
+        for group in colliding:  # обрабатываем столкновения со всеми объектами
+            for el in group:
+                if el == self or (self in players_group and (el in players_group or el in enemies_group)) or \
+                        (self in enemies_group and el in players_group):
+                    # игроки не сталкиваются друг с другом (и с врагами тож)
+                    continue
+                if test_rect_no_x.colliderect(el.rect):  # столкновение по у в будущей позиции, туда не идем
+                    self.movement_vector[1] = 0
+                if test_rect_no_y.colliderect(el.rect):  # столкновение по х в будущей позиции, туда не идем
+                    self.movement_vector[0] = 0
+                if self.rect.colliderect(el.rect):  # НЕ ДОПУСКАТЬ ЗАСТРЯВАНИЕ ВООБЩЕ!!!, но если застряли,
+                    # то перемещаем в предыдущую позицию
+                    self.pos = self.prev_pos  # это не сработает если в предыдущей позиции мы уже застряли
+                    # если такое будет происходить, я попробую еще чета, но пока сойдет
 
     def update(self, *args):
         pass
@@ -63,14 +88,14 @@ class Player(Pawn):  # игрок
 
     # желательно без трансформа, просто сделать мелкий спрайт, но пока сойдет
 
-    def __init__(self, x, y, nick, *groups):
+    def __init__(self, x: int, y: int, nick: str, *groups):
         super().__init__(x, y, *groups)
 
         self.image = Player.image
         self.rect = self.image.get_rect()
+        self.rect.height = 5  # чтоб за спрайт заходить можно было
 
         self.movement_speed = 5
-        self.pos = [x, y]
         self.health = 100  # TODO: ИСПОЛЬЗОВАТЬ СКОРОСТЬ ВМЕСТО ПЕРЕМЕЩНИЯ МОМЕНТАЛЬНОГО
         self.alive = True
         self.nick = nick
@@ -80,15 +105,19 @@ class Player(Pawn):  # игрок
         self.inventory = []
 
     def move(self):
+        super(Player, self).move()
+
         k = pygame.key.get_pressed()
         if k[pygame.K_w]:
-            self.pos[1] += -1 * self.movement_speed
+            self.movement_vector[1] += -1 * self.movement_speed
         if k[pygame.K_s]:
-            self.pos[1] += 1 * self.movement_speed
+            self.movement_vector[1] += 1 * self.movement_speed
         if k[pygame.K_a]:
-            self.pos[0] += -1 * self.movement_speed
+            self.movement_vector[0] += -1 * self.movement_speed
         if k[pygame.K_d]:
-            self.pos[0] += 1 * self.movement_speed
+            self.movement_vector[0] += 1 * self.movement_speed
+
+        self.collision_test()
 
     def update(self, *args):
         self.move()
@@ -96,21 +125,18 @@ class Player(Pawn):  # игрок
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
-    def __init__(self, x, y, *groups):
+    def __init__(self, x: int, y: int, *groups):
         super().__init__(x, y, *groups)
         self.movement_speed = 2
-        self.pos = [x, y]
         self.health = 100
         self.alive = True
+        self.rect.height = 5  # чтоб за спрайт заходить можно было
 
-    def move(self, obj):  # obj - объекты с которыми можем столкнуться
-        self.pos[0] += self.movement_vector[0]
-        self.pos[1] += self.movement_vector[1]
-        self.movement_vector = [0, 0]  # обнуляем скорость, иначе будем суммировать со скор. с прошлого раза
+    def move(self):  # obj - объекты с которыми можем столкнуться
+        super(Enemy, self).move()
 
         target = [(p, find_vector_len(self.pos, p.pos)) for p in players_group]  # берем живых игроков
         target = sorted(target, key=lambda x: (x[1], x[0].health, x[0].nick))[0][0]  # кого бьем
-        collision_tolerance = 0.02  # к/ф отталкивания при коллизии
         if target.pos[1] < self.pos[1]:
             self.movement_vector[1] += -1 * self.movement_speed  # вверх
         if target.pos[1] > self.pos[1]:
@@ -120,37 +146,11 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
         if target.pos[0] > self.pos[0]:
             self.movement_vector[0] += 1 * self.movement_speed  # направо
 
-        test_rect_no_x = self.rect.copy()
-        test_rect_no_x.topleft = (self.pos[0], self.pos[1] + self.movement_vector[1])
-        test_rect_no_y = self.rect.copy()
-        test_rect_no_y.topleft = (self.pos[0] + self.movement_vector[0], self.pos[1])
-
-        for group in obj:
-            for el in group:  # TODO: починить
-                if el == self:
-                    continue
-                go_left, go_up = self.rect.x < el.rect.x, self.rect.y < el.rect.y
-                if test_rect_no_x.colliderect(el.rect):  # столкновение на y
-                    self.movement_vector[1] = 0
-                if test_rect_no_y.colliderect(el.rect):  # столкновение на x
-                    self.movement_vector[0] = 0
-
-        # for e in enemies_group:  # тут смотрим с кем из тиммейтов сталкиваемся
-        #     if e == self:
-        #         continue
-        #     if pygame.sprite.collide_rect(self, e):
-        #         # чтоб не толкать друг в друга, думаем куда толкать
-        #         go_left, go_up = self.rect.x < e.rect.x, self.rect.y < e.rect.y
-        #         self.pos[0] -= e.rect.width * collision_tolerance * (1 if go_left else -1)  # толкаем себя
-        #         self.pos[1] -= e.rect.height * collision_tolerance * (1 if go_up else -1)
-        #         tmp = list(e.rect.topleft)  # толкаем другого чела
-        #         tmp[0] += self.rect.width * collision_tolerance * (-1 if go_left else 1)
-        #         tmp[1] += self.rect.height * collision_tolerance * (-1 if go_up else 1)
-        #         e.rect.topleft = tmp
-        #         # print('COLLIDIN')
+        self.collision_test()
 
     def update(self, *args):
-        self.move([enemies_group, walls_group, players_group])
+        self.prev_pos = self.pos
+        self.move()
         self.rect.topleft = self.pos
 
 
@@ -185,6 +185,7 @@ class Wall(pygame.sprite.Sprite):  # стены, от них наверн ник
         self.pos = [x, y]
         self.image = Wall.image
         self.rect = self.image.get_rect()
+        self.rect.height = 5
 
         self.rect.topleft = self.pos
 
@@ -230,7 +231,6 @@ def game_loop():
     for _ in range(6):
         Enemy(random.randint(0, screen.get_width()),
               random.randint(0, screen.get_height()), enemies_group)
-
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
             return True
@@ -240,22 +240,22 @@ def game_loop():
             if event.type == pygame.QUIT:
                 exit_condition = True
 
-        # player.update(event) # вызываем внутренний апдейт у плееры
-        # (мб можно отсюда даже вызывать, тогда ту строку удалить)
-
-        # рендерим тут
         for p in players_group:
             p.update(screen)
         for e in enemies_group:
             e.update(screen)
-        players_group.draw(screen)
-        enemies_group.draw(screen)
-        deployable_group.draw(screen)
-        items_group.draw(screen)
-        walls_group.draw(screen)
+
+        draw()  # рендерим тут
 
         pygame.display.flip()
-        clock.tick(120)
+        clock.tick(75)
+
+
+def draw():
+    all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
+                   *items_group.sprites(), *walls_group.sprites()]  # СЮДА ВСЕ ГРУППЫ!!!
+    for spr in sorted(all_sprites, key=lambda x: x.pos[1]):
+        screen.blit(spr.image, spr.rect)
 
 
 def main():
@@ -274,5 +274,6 @@ if __name__ == '__main__':
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
+    colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 
     main()
