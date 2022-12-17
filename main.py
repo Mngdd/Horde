@@ -41,11 +41,11 @@ class Pawn(pygame.sprite.Sprite):
         self.pos = (x, y)
         self.health = 0
         self.alive = False
-        self.movementVector = [0, 0]
-        self.movementSpeed = 0
+        self.movement_vector = [0, 0]
+        self.movement_speed = 0
         self.look_at = 0, 0  # в эту точку повернут игрок головой
-        self.availableWeapons = []
-        self.equippedWeapon = None
+        self.available_weapons = []
+        self.equipped_weapon = None
         self.inventory = []
 
     def move(self):
@@ -69,26 +69,26 @@ class Player(Pawn):  # игрок
         self.image = Player.image
         self.rect = self.image.get_rect()
 
-        self.movementSpeed = 5
+        self.movement_speed = 5
         self.pos = [x, y]
         self.health = 100  # TODO: ИСПОЛЬЗОВАТЬ СКОРОСТЬ ВМЕСТО ПЕРЕМЕЩНИЯ МОМЕНТАЛЬНОГО
         self.alive = True
         self.nick = nick
         # TODO: нужно оружие
-        self.availableWeapons = []
-        self.equippedWeapon = None
+        self.available_weapons = []
+        self.equipped_weapon = None
         self.inventory = []
 
     def move(self):
         k = pygame.key.get_pressed()
         if k[pygame.K_w]:
-            self.pos[1] += -1 * self.movementSpeed
+            self.pos[1] += -1 * self.movement_speed
         if k[pygame.K_s]:
-            self.pos[1] += 1 * self.movementSpeed
+            self.pos[1] += 1 * self.movement_speed
         if k[pygame.K_a]:
-            self.pos[0] += -1 * self.movementSpeed
+            self.pos[0] += -1 * self.movement_speed
         if k[pygame.K_d]:
-            self.pos[0] += 1 * self.movementSpeed
+            self.pos[0] += 1 * self.movement_speed
 
     def update(self, *args):
         self.move()
@@ -98,40 +98,59 @@ class Player(Pawn):  # игрок
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
     def __init__(self, x, y, *groups):
         super().__init__(x, y, *groups)
-        self.movementSpeed = 2
+        self.movement_speed = 2
         self.pos = [x, y]
         self.health = 100
         self.alive = True
 
-    def move(self):
+    def move(self, obj):  # obj - объекты с которыми можем столкнуться
+        self.pos[0] += self.movement_vector[0]
+        self.pos[1] += self.movement_vector[1]
+        self.movement_vector = [0, 0]  # обнуляем скорость, иначе будем суммировать со скор. с прошлого раза
+
         target = [(p, find_vector_len(self.pos, p.pos)) for p in players_group]  # берем живых игроков
         target = sorted(target, key=lambda x: (x[1], x[0].health, x[0].nick))[0][0]  # кого бьем
-        collision_tolerance = 0.1  # к/ф отталкивания при коллизии
-        if target.pos[1] < self.pos[1]:  # TODO: Добавить тут проверку на коллизию(в выбранной точке никого не будет)
-            self.pos[1] += -1 * self.movementSpeed
+        collision_tolerance = 0.02  # к/ф отталкивания при коллизии
+        if target.pos[1] < self.pos[1]:
+            self.movement_vector[1] += -1 * self.movement_speed  # вверх
         if target.pos[1] > self.pos[1]:
-            self.pos[1] += 1 * self.movementSpeed
+            self.movement_vector[1] += 1 * self.movement_speed  # вниз
         if target.pos[0] < self.pos[0]:
-            self.pos[0] += -1 * self.movementSpeed
+            self.movement_vector[0] += -1 * self.movement_speed  # налево
         if target.pos[0] > self.pos[0]:
-            self.pos[0] += 1 * self.movementSpeed
+            self.movement_vector[0] += 1 * self.movement_speed  # направо
 
-        for e in enemies_group:
-            if e == self:
-                continue
-            if pygame.sprite.collide_rect(self, e):
-                # чтоб не толкать друг в друга, думаем куда толкать
-                go_left, go_up = self.rect.x < e.rect.x, self.rect.y < e.rect.y
-                self.pos[0] -= e.rect.width * collision_tolerance * (1 if go_left else -1)  # толкаем себя
-                self.pos[1] -= e.rect.height * collision_tolerance * (1 if go_up else -1)
-                tmp = list(e.rect.topleft)  # толкаем другого чела
-                tmp[0] += self.rect.width * collision_tolerance * (-1 if go_left else 1)
-                tmp[1] += self.rect.height * collision_tolerance * (-1 if go_up else 1)
-                e.rect.topleft = tmp
-                # print('COLLIDIN')
+        test_rect_no_x = self.rect.copy()
+        test_rect_no_x.topleft = (self.pos[0], self.pos[1] + self.movement_vector[1])
+        test_rect_no_y = self.rect.copy()
+        test_rect_no_y.topleft = (self.pos[0] + self.movement_vector[0], self.pos[1])
+
+        for group in obj:
+            for el in group:  # TODO: починить
+                if el == self:
+                    continue
+                go_left, go_up = self.rect.x < el.rect.x, self.rect.y < el.rect.y
+                if test_rect_no_x.colliderect(el.rect):  # столкновение на y
+                    self.movement_vector[1] = 0
+                if test_rect_no_y.colliderect(el.rect):  # столкновение на x
+                    self.movement_vector[0] = 0
+
+        # for e in enemies_group:  # тут смотрим с кем из тиммейтов сталкиваемся
+        #     if e == self:
+        #         continue
+        #     if pygame.sprite.collide_rect(self, e):
+        #         # чтоб не толкать друг в друга, думаем куда толкать
+        #         go_left, go_up = self.rect.x < e.rect.x, self.rect.y < e.rect.y
+        #         self.pos[0] -= e.rect.width * collision_tolerance * (1 if go_left else -1)  # толкаем себя
+        #         self.pos[1] -= e.rect.height * collision_tolerance * (1 if go_up else -1)
+        #         tmp = list(e.rect.topleft)  # толкаем другого чела
+        #         tmp[0] += self.rect.width * collision_tolerance * (-1 if go_left else 1)
+        #         tmp[1] += self.rect.height * collision_tolerance * (-1 if go_up else 1)
+        #         e.rect.topleft = tmp
+        #         # print('COLLIDIN')
 
     def update(self, *args):
-        self.move()
+        self.move([enemies_group, walls_group, players_group])
         self.rect.topleft = self.pos
 
 
@@ -151,8 +170,8 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
         self.name = 'PLACEHOLDER'
 
         # скорость нужна чтобы предметы разлетались в разные стороны(например при смерти персонажа)
-        self.movementVector = [0, 0]
-        self.movementSpeed = 0
+        self.movement_vector = [0, 0]
+        self.movement_speed = 0
 
     def interact(self):
         pass
