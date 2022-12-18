@@ -1,8 +1,8 @@
 import os
-import random
 import sys
 
 import pygame
+from pytmx import load_pygame
 
 pygame.init()
 size = (800, 600)
@@ -37,7 +37,12 @@ class Pawn(pygame.sprite.Sprite):
 
         self.image = Pawn.image  # надо же чета вставить
         self.rect = self.image.get_rect()
-        self.rect.height = 5  # чтоб за спрайт заходить можно было
+
+        self.collision_height = 5
+        self.collision_rect = self.rect.copy()
+
+        self.collision_rect.h = self.collision_height
+        self.collision_rect.y += self.rect.height - self.collision_height
 
         self.pos = [x, y]  # левый верхний угол всегда
         self.health = 0
@@ -53,13 +58,18 @@ class Pawn(pygame.sprite.Sprite):
     def move(self):  # расчет передвижения
         self.pos[0] += self.movement_vector[0]
         self.pos[1] += self.movement_vector[1]
+        self.collision_rect.update(self.rect.bottomleft[0], self.rect.bottomleft[1] - self.collision_height,
+                                   self.collision_rect.w, self.collision_height)
+
         self.movement_vector = [0, 0]
 
     def collision_test(self):  # коллизию считаем
-        test_rect_no_x = self.rect.copy()
-        test_rect_no_x.topleft = (self.pos[0], self.pos[1] + self.movement_vector[1])
-        test_rect_no_y = self.rect.copy()
-        test_rect_no_y.topleft = (self.pos[0] + self.movement_vector[0], self.pos[1])
+        test_rect_no_x = self.collision_rect.copy()
+        test_rect_no_x.topleft = (self.collision_rect.topleft[0],
+                                  self.collision_rect.topleft[1] + self.movement_vector[1])
+        test_rect_no_y = self.collision_rect.copy()
+        test_rect_no_y.topleft = (self.collision_rect.topleft[0] + self.movement_vector[0],
+                                  self.collision_rect.topleft[1])
 
         for group in colliding:  # обрабатываем столкновения со всеми объектами
             for el in group:
@@ -69,18 +79,42 @@ class Pawn(pygame.sprite.Sprite):
                     continue
                 if test_rect_no_x.colliderect(el.rect):  # столкновение по у в будущей позиции, туда не идем
                     self.movement_vector[1] = 0
+                    if DRAW_COLLISION:
+                        pass
+                        # print(el.rect, self.pos, self.rect)
                 if test_rect_no_y.colliderect(el.rect):  # столкновение по х в будущей позиции, туда не идем
                     self.movement_vector[0] = 0
-                if self.rect.colliderect(el.rect):  # НЕ ДОПУСКАТЬ ЗАСТРЯВАНИЕ ВООБЩЕ!!!, но если застряли,
+                    if DRAW_COLLISION:
+                        pass
+                        # print(el.rect, self.pos, self.rect)
+                if self.collision_rect.colliderect(el.rect):  # НЕ ДОПУСКАТЬ ЗАСТРЯВАНИЕ ВООБЩЕ!!!, но если застряли,
                     # то перемещаем в предыдущую позицию
                     self.pos = self.prev_pos  # это не сработает если в предыдущей позиции мы уже застряли
                     # если такое будет происходить, я попробую еще чета, но пока сойдет
 
+    def init_rect(self):
+        self.rect = self.image.get_rect()
+
     def update(self, *args):
-        pass
+        self.rect.topleft = self.pos
 
     def fire(self):
         pass  # стрелят
+
+
+class DebugCollisionBox(pygame.sprite.Sprite):  # все ради того, чтобы увидеть коллизию нижнюю
+    def __init__(self, groups, p):
+        super().__init__(groups)
+        self.image = pygame.Surface([p.rect.width, p.collision_height])
+        self.image.fill('yellow')
+        self.rect = self.image.get_rect()
+        self.player = p
+        self.pos = p.collision_rect.bottomleft
+        self.update()
+
+    def update(self, *args):
+        self.pos = self.player.collision_rect.bottomleft
+        self.rect.bottomleft = self.pos
 
 
 class Player(Pawn):  # игрок
@@ -92,8 +126,12 @@ class Player(Pawn):  # игрок
         super().__init__(x, y, *groups)
 
         self.image = Player.image
-        self.rect = self.image.get_rect()
-        self.rect.height = 5  # чтоб за спрайт заходить можно было
+
+        super(Player, self).init_rect()
+
+        if DRAW_COLLISION:
+            self.image = pygame.Surface([self.rect.width, self.rect.height])
+            self.image.fill('blue')
 
         self.movement_speed = 5
         self.health = 100  # TODO: ИСПОЛЬЗОВАТЬ СКОРОСТЬ ВМЕСТО ПЕРЕМЕЩНИЯ МОМЕНТАЛЬНОГО
@@ -120,8 +158,9 @@ class Player(Pawn):  # игрок
         self.collision_test()
 
     def update(self, *args):
+        self.prev_pos = self.pos
         self.move()
-        self.rect.topleft = self.pos
+        super(Player, self).update()
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
@@ -130,7 +169,7 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
         self.movement_speed = 2
         self.health = 100
         self.alive = True
-        self.rect.height = 5  # чтоб за спрайт заходить можно было
+        super(Enemy, self).init_rect()
 
     def move(self):  # obj - объекты с которыми можем столкнуться
         super(Enemy, self).move()
@@ -151,7 +190,7 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
     def update(self, *args):
         self.prev_pos = self.pos
         self.move()
-        self.rect.topleft = self.pos
+        super(Enemy, self).update()
 
 
 class Deployable(Pawn):  # гаджетиы - турели/мины и всякое такое что пассивно наносит урон врагам
@@ -178,14 +217,27 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
 
 
 class Wall(pygame.sprite.Sprite):  # стены, от них наверн никого наследовать не надо
-    image = pygame.transform.scale(load_image("templates/wall.jpg"), (32, 32))
+    image = pygame.transform.scale(load_image("templates/wall.jpg"), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
 
-    def __init__(self, x, y, *groups):
-        super().__init__(*groups)
+    def __init__(self, x, y, groups, rect_data, image=None):
+        super().__init__(groups)
         self.pos = [x, y]
-        self.image = Wall.image
+        self.image = Wall.image if image is None else image
         self.rect = self.image.get_rect()
-        self.rect.height = 5
+        self.rect.topleft = self.pos
+        if DRAW_COLLISION:
+            self.image = pygame.Surface([self.rect.width, self.rect.height])
+            self.image.fill('red')
+
+
+class Tile(pygame.sprite.Sprite):  # просто плитки, никакой коллизии
+    image = pygame.transform.scale(load_image("templates/grass.jpg"), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
+
+    def __init__(self, x, y, groups, image=None):
+        super().__init__(groups)
+        self.pos = [x, y]
+        self.image = Tile.image if image is None else image
+        self.rect = self.image.get_rect()
 
         self.rect.topleft = self.pos
 
@@ -225,12 +277,14 @@ def game_loop():
     finish_game = False
 
     # спаун
-    Player(screen.get_width() // 2, screen.get_height() // 2, 'JOHN CENA', players_group)
+    player = Player(430, 300, 'JOHN CENA', players_group)
+    if DRAW_COLLISION:
+        DebugCollisionBox(debug, player)
     for i in range(4):
-        Wall(300 + 32 * i, 120, walls_group)
-    for _ in range(6):
-        Enemy(random.randint(0, screen.get_width()),
-              random.randint(0, screen.get_height()), enemies_group)
+        Wall(300 + 32 * i, 300, walls_group, [], None)
+    # for _ in range(6):
+    #     Enemy(random.randint(0, screen.get_width()),
+    #           random.randint(0, screen.get_height()), enemies_group)
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
             return True
@@ -244,6 +298,8 @@ def game_loop():
             p.update(screen)
         for e in enemies_group:
             e.update(screen)
+        for d in debug:
+            d.update(screen)
 
         draw()  # рендерим тут
 
@@ -252,9 +308,12 @@ def game_loop():
 
 
 def draw():
+    tile_group.draw(screen)
+
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
-                   *items_group.sprites(), *walls_group.sprites()]  # СЮДА ВСЕ ГРУППЫ!!!
-    for spr in sorted(all_sprites, key=lambda x: x.pos[1]):
+                   *items_group.sprites(), *walls_group.sprites(), *debug.sprites()]
+    # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
+    for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
         screen.blit(spr.image, spr.rect)
 
 
@@ -268,12 +327,32 @@ def main():
                 game_loop()
 
 
+def load_level(level_name):
+    global game_map
+    game_map = load_pygame(level_name)
+    for layer in game_map.visible_layers:
+        if layer.name == 'floor':
+            for x, y, surf in layer.tiles():
+                Tile(x * 32, y * 32, tile_group, surf)
+        if layer.name == 'walls':
+            for x, y, surf in layer.tiles():
+                Wall(x * 32, y * 32, walls_group, [x * 32, y * 32, surf.get_width(), surf.get_height()], surf)
+
+
 if __name__ == '__main__':
+    DRAW_COLLISION = True  # для дебага, спамит в консоль корды и отрисовывает self.rect спрайта
+    debug = pygame.sprite.Group()
+
+    tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
     players_group = pygame.sprite.Group()
     enemies_group = pygame.sprite.Group()
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
+
+    game_map = None  # просто чтоб было
+    load_level("data\\maps\\dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
+
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 
     main()
