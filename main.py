@@ -1,7 +1,9 @@
 import os
+import socket
 import sys
 import random
 import pygame
+from multiplayer import Server, Client, Synchronizable, DEFAULT_SERVER_IP, DEFAULT_SERVER_PORT, input_server_credentials
 
 pygame.init()
 size = (800, 600)
@@ -28,15 +30,17 @@ def load_image(name, colorkey=None):
     return image
 
 
-class Pawn(pygame.sprite.Sprite):
+class Pawn(pygame.sprite.Sprite, Synchronizable):
     image = pygame.transform.scale(load_image("templates/Obsolete.png"), (32, 32))
 
     def __init__(self, *groups, x, y):
-        super().__init__(*groups)
+        pygame.sprite.Sprite.__init__(self, *groups)
+        Synchronizable.__init__(self, client, tuple(), {'x': x, 'y': y})
 
         self.image = Pawn.image  # надо же чета вставить
-        self.rect = self.image.get_rect()
 
+        self._start_tracking()
+        self.rect = self.image.get_rect()
         self.pos = (x, y)
         self.health = 0
         self.alive = False
@@ -46,6 +50,7 @@ class Pawn(pygame.sprite.Sprite):
         self.availableWeapons = []
         self.equippedWeapon = None
         self.inventory = []
+        self._stop_tracking(False)
 
     def move(self):
         pass  # расчет передвижения, этому классу оно незачем
@@ -64,10 +69,14 @@ class Player(Pawn):  # игрок
 
     def __init__(self, *groups, x, y, nick):
         super().__init__(*groups, x=x, y=y)
+        self._kwargs['nick'] = nick
 
         self.image = Player.image
-        self.rect = self.image.get_rect()
+        self.is_first = self.client.id == 0
+        self.can_move = True
 
+        self._start_tracking()
+        self.rect = self.image.get_rect()
         self.movementSpeed = 5
         self.pos = [x, y]
         self.health = 100
@@ -77,6 +86,7 @@ class Player(Pawn):  # игрок
         self.availableWeapons = []
         self.equippedWeapon = None
         self.inventory = []
+        self._stop_tracking()
 
     def move(self):
         k = pygame.key.get_pressed()
@@ -90,8 +100,11 @@ class Player(Pawn):  # игрок
             self.pos[0] += 1 * self.movementSpeed
 
     def update(self, *args):
-        self.move()
+        self.sync_from_server()
+        if self.can_move:
+            self.move()
         self.rect.topleft = self.pos
+        self.sync_to_server()
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
@@ -209,6 +222,19 @@ def game_loop():
         # player.update(event) # вызываем внутренний апдейт у плееры
         # (мб можно отсюда даже вызывать, тогда ту строку удалить)
 
+        for cmd in client.get_create_commands():
+            new_object = Synchronizable.from_remote(*cmd[1:], globals_=globals())
+            if isinstance(new_object, Player):
+                new_object.can_move = False
+                players_group.add(new_object)
+                print(new_object.id)
+            # if isinstance(new_object, Enemy):
+            #     enemies_group.add(new_object)
+            # if isinstance(new_object, Deployable):
+            #     enemies_group.add(deployable_group)
+            # if isinstance(new_object, Item):
+            #     enemies_group.add(items_group)
+
         # рендерим тут
         for p in players_group:
             p.update(screen)
@@ -238,5 +264,15 @@ if __name__ == '__main__':
     enemies_group = pygame.sprite.Group()
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
+    server_ip, server_port = input_server_credentials()
+    valid_crenedtials = False
+    while not valid_crenedtials:
+        try:
+            client = Client(server_ip, server_port)
+        except ConnectionRefusedError:
+            print('не удалось подключиться, попробуйте ввести другой сервер')
+            server_ip, server_port = input_server_credentials(False)
+        else:
+            valid_crenedtials = True
 
     main()
