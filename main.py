@@ -1,6 +1,6 @@
 import os
 import sys
-
+from network import Network
 import pygame
 from pytmx import load_pygame
 
@@ -236,6 +236,7 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 
 def game_loop():
+    net = Network()
     exit_condition = False
     finish_game = False
 
@@ -248,9 +249,14 @@ def game_loop():
     # for _ in range(6):
     #     Enemy(random.randint(0, screen.get_width()),
     #           random.randint(0, screen.get_height()), enemies_group)
+
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
             return True
+
+        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ
+        players_list = parse_data(send_data())
+
         screen.fill(BGCOLOR)
 
         for event in pygame.event.get():
@@ -266,6 +272,23 @@ def game_loop():
 
         pygame.display.flip()
         clock.tick(75)
+
+
+def send_data(self):  # TODO: ПОМЕНЯТЬ ОТПРАВЛЯЕМУЮ И ПОЛУЧАЕМУЮ ИНФОРМАЦИЮ
+    """
+    Send position to server
+    :return: None
+    """
+    data = str(self.net.id) + ":" + str(self.player.x) + "," + str(self.player.y)
+    reply = self.net.send(data)
+    return reply
+
+def parse_data(data):
+    try:
+        d = data.split(":")[1].split(",")
+        return int(d[0]), int(d[1])
+    except:
+        return 0, 0
 
 
 def draw():
