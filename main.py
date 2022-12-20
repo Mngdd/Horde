@@ -309,7 +309,7 @@ class StartMenu:
             events = pygame.event.get()
             for event in events:
                 if event.type == pygame.QUIT:
-                    self.running = False
+                    self.destroy()
             screen.fill(self.bg_color)
             screen.blit(self.title_surface, (300, 20))
             pygame_widgets.update(events)
@@ -318,14 +318,21 @@ class StartMenu:
 
     def play(self):
         self.result = self.PLAY
-        self.running = False
+        self.destroy()
 
     def settings(self):
+        self.destroy()
         SettingsMenu().run()
 
     def quit(self):
         self.result = self.QUIT
+        self.destroy()
+
+    def destroy(self):
         self.running = False
+        self.settings_button.hide()
+        self.quit_button.hide()
+        self.play_button.hide()
 
 
 class SettingsMenu:
@@ -335,7 +342,7 @@ class SettingsMenu:
 
     def __init__(self):
         self.running = False
-        quit_button = Button(screen, 50, 150, 100, 30, text='Выйти', fontSize=self.font_size, radius=5, onClick=self.quit,
+        self.quit_button = Button(screen, 50, 150, 100, 30, text='Выйти', fontSize=self.font_size, radius=5, onClick=self.quit,
                              inactiveColour=self.font_color)
         font = pygame.font.SysFont('', self.font_size)
         self.title_surface = font.render('Назтройки', True, self.font_color)
@@ -352,10 +359,12 @@ class SettingsMenu:
             screen.blit(self.title_surface, (300, 20))
             pygame_widgets.update(events)
             pygame.display.update()
+        del self.quit_button
         return self.result
 
     def quit(self):
         self.running = False
+        StartMenu().run()
 
 
 def main():
@@ -391,7 +400,7 @@ if __name__ == '__main__':
     walls_group = pygame.sprite.Group()
 
     game_map = None  # просто чтоб было
-    load_level("data\\maps\\dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
+    load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
 
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 
