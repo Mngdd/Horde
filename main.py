@@ -1,9 +1,10 @@
 import os
 import sys
-
+from network import Network
 import pygame
 from pytmx import load_pygame
 from menu import StartMenu
+import ast
 
 pygame.init()
 size = (800, 600)
@@ -108,18 +109,22 @@ class Player(Pawn):  # игрок
         self.equipped_weapon = None
         self.inventory = []
 
-    def move(self):
+    def move(self, server_player=False):
         super(Player, self).move()
 
-        k = pygame.key.get_pressed()
-        if k[pygame.K_w]:
-            self.movement_vector[1] += -1 * self.movement_speed
-        if k[pygame.K_s]:
-            self.movement_vector[1] += 1 * self.movement_speed
-        if k[pygame.K_a]:
-            self.movement_vector[0] += -1 * self.movement_speed
-        if k[pygame.K_d]:
-            self.movement_vector[0] += 1 * self.movement_speed
+        if server_player:
+            self.movement_vector[1] = server_player[1]
+            self.movement_vector[0] = server_player[0]
+        else:
+            k = pygame.key.get_pressed()
+            if k[pygame.K_w]:
+                self.movement_vector[1] += -1 * self.movement_speed
+            if k[pygame.K_s]:
+                self.movement_vector[1] += 1 * self.movement_speed
+            if k[pygame.K_a]:
+                self.movement_vector[0] += -1 * self.movement_speed
+            if k[pygame.K_d]:
+                self.movement_vector[0] += 1 * self.movement_speed
 
         self.collision_test()
 
@@ -237,21 +242,42 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 
 def game_loop():
+    if mp_game:
+        net = Network()
     exit_condition = False
     finish_game = False
 
-    players_list = []
+    players = {} #{'test': {'online': False, 'ip': -1, 'vars': [None]}}  # такой же как и в сервер пай
     # спаун
-    players_list.append(Player(430, 300, 'JOHN CENA', players_group))
+    p = Player(430, 300, 'JOHN CENA', players_group)  # игрк
 
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
     # for _ in range(6):
     #     Enemy(random.randint(0, screen.get_width()),
     #           random.randint(0, screen.get_height()), enemies_group)
+
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
             return True
+
+        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ И ПОЧИНИТЬ МЕНЯ!!!!!!!!!
+
+        if mp_game:
+            players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
+            try:
+                for player_nick in players_list:
+                    print(player_nick)
+                    x, y = players_list[player_nick]
+                    if players_list[player_nick] not in players:
+                        players[player_nick] = Player(x, y, player_nick, players_group)  # другой игрк
+                    players[player_nick].move((x, y))
+
+                    # players_list[player_data[0]] = player_data[1]
+                    # print(players_list, players)
+            except Exception as e:
+                print('MAIN//', e)
+
         screen.fill(BGCOLOR)
 
         for event in pygame.event.get():
@@ -267,6 +293,24 @@ def game_loop():
 
         pygame.display.flip()
         clock.tick(75)
+
+
+def send_data(data, net):  # TODO: ПОМЕНЯТЬ ОТПРАВЛЯЕМУЮ И ПОЛУЧАЕМУЮ ИНФОРМАЦИЮ
+    """
+    Send position to server
+    :return: None
+    """
+    reply = net.send(str(data))
+    return reply
+
+
+def parse_data(data):
+    try:
+        d = ast.literal_eval(data)  # TODO: тут тоже доделать
+        return d
+    except Exception as e:
+        print('PARSE//', e)
+        return None
 
 
 def draw():
@@ -304,6 +348,8 @@ def load_level(level_name):
 
 
 if __name__ == '__main__':
+    mp_game = True  # это сетевая или мультиплеер
+
     tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
     players_group = pygame.sprite.Group()
     enemies_group = pygame.sprite.Group()
