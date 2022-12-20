@@ -132,40 +132,29 @@ class Player(Pawn):  # игрок
         self.equipped_weapon = None
         self.inventory = []
         self.id = id_
-        self.constant_movement = [0, 0]
+        self.pressed = dict()
 
     def move(self):
         super(Player, self).move()
 
-        self.movement_vector[0] += self.constant_movement[0] * self.movement_speed
-        self.movement_vector[1] += self.constant_movement[1] * self.movement_speed
+        if self.pressed.get(pygame.K_w, False):
+            self.movement_vector[1] += -1 * self.movement_speed
+        if self.pressed.get(pygame.K_s, False):
+            self.movement_vector[1] += 1 * self.movement_speed
+        if self.pressed.get(pygame.K_a, False):
+            self.movement_vector[0] += -1 * self.movement_speed
+        if self.pressed.get(pygame.K_d, False):
+            self.movement_vector[0] += 1 * self.movement_speed
 
         self.collision_test()
 
     def update(self, *args):
         self.prev_pos = self.pos
-        events = server.get_events(self.id)
-        # if events:
-        #     print(events)
-        for event in events:
+        for event in server.get_events(self.id):
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_w:
-                    self.constant_movement[1] += -1
-                elif event.key == pygame.K_s:
-                    self.constant_movement[1] += 1
-                elif event.key == pygame.K_a:
-                    self.constant_movement[0] += -1
-                elif event.key == pygame.K_d:
-                    self.constant_movement[0] += 1
+                self.pressed[event.key] = True
             elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_w:
-                    self.constant_movement[1] += 1
-                elif event.key == pygame.K_s:
-                    self.constant_movement[1] += -1
-                elif event.key == pygame.K_a:
-                    self.constant_movement[0] += 1
-                elif event.key == pygame.K_d:
-                    self.constant_movement[0] += -1
+                self.pressed[event.key] = False
         self.move()
         super(Player, self).update()
 
@@ -338,7 +327,7 @@ class Server:
 
     def get_events(self, player_id: int):
         events: list = self.events[player_id].copy()
-        events.reverse()
+        # events.reverse()
         self.events[player_id].clear()
         return events
 
@@ -392,7 +381,8 @@ def game_loop():
 
         server.flip()
         pygame.display.flip()
-        clock.tick(75)
+        # print(clock.get_fps())
+        clock.tick(60)
 
 
 def draw():

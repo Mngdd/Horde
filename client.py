@@ -66,6 +66,7 @@ def game_loop():
         screen.fill(BGCOLOR)
         draw()
         pygame.display.flip()
+        # print(clock.get_fps())
         clock.tick(60)
 
 
