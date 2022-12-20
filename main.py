@@ -3,6 +3,20 @@ import sys
 
 import pygame
 from pytmx import load_pygame
+import pickle
+import socket
+import threading
+import queue
+import time
+from pathlib import Path
+
+
+DEFAULT_SERVER_IP = '127.0.0.1'
+DEFAULT_SERVER_PORT = 5070
+SOCKET_BUFFER_SIZE = 4096
+
+CMD_CREATE = 0
+CMD_SYNC = 1
 
 pygame.init()
 size = (800, 600)
@@ -12,8 +26,17 @@ pygame.display.set_caption("Top Down")
 clock = pygame.time.Clock()
 
 
+def receive_whole_msg(conn: socket.socket, end_msg=b'end'):
+    chunk = conn.recv(SOCKET_BUFFER_SIZE)
+    chunks = [chunk]
+    while chunk != end_msg:
+        chunk = conn.recv(SOCKET_BUFFER_SIZE)
+        chunks.append(chunk)
+    return b''.join(chunks[:-1])  # обрезаем последний т. к. он b'end'
+
+
 def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)
+    fullname = name
     # если файл не существует, то выходим
     if not os.path.isfile(fullname):
         print(f"Файл с изображением '{fullname}' не найден")
@@ -30,7 +53,8 @@ def load_image(name, colorkey=None):
 
 
 class Pawn(pygame.sprite.Sprite):
-    image = pygame.transform.scale(load_image("templates/Obsolete.png"), (32, 32))
+    image_path = Path("data/templates/Obsolete.png")
+    image = pygame.transform.scale(load_image(image_path), (32, 32))
 
     def __init__(self, x: int, y: int, *groups):
         super().__init__(*groups)
@@ -88,11 +112,12 @@ class Pawn(pygame.sprite.Sprite):
 
 
 class Player(Pawn):  # игрок
-    image = pygame.transform.scale(load_image("templates/arrow.png"), (32, 32))
+    image_path = Path("data/templates/arrow.png")
+    image = pygame.transform.scale(load_image(image_path), (32, 32))
 
     # желательно без трансформа, просто сделать мелкий спрайт, но пока сойдет
 
-    def __init__(self, x: int, y: int, nick: str, *groups):
+    def __init__(self, x: int, y: int, nick: str, id_: int, *groups):
         super().__init__(x, y, *groups)
 
         self.image = Player.image
@@ -106,24 +131,41 @@ class Player(Pawn):  # игрок
         self.available_weapons = []
         self.equipped_weapon = None
         self.inventory = []
+        self.id = id_
+        self.constant_movement = [0, 0]
 
     def move(self):
         super(Player, self).move()
 
-        k = pygame.key.get_pressed()
-        if k[pygame.K_w]:
-            self.movement_vector[1] += -1 * self.movement_speed
-        if k[pygame.K_s]:
-            self.movement_vector[1] += 1 * self.movement_speed
-        if k[pygame.K_a]:
-            self.movement_vector[0] += -1 * self.movement_speed
-        if k[pygame.K_d]:
-            self.movement_vector[0] += 1 * self.movement_speed
+        self.movement_vector[0] += self.constant_movement[0] * self.movement_speed
+        self.movement_vector[1] += self.constant_movement[1] * self.movement_speed
 
         self.collision_test()
 
     def update(self, *args):
         self.prev_pos = self.pos
+        events = server.get_events(self.id)
+        # if events:
+        #     print(events)
+        for event in events:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_w:
+                    self.constant_movement[1] += -1
+                elif event.key == pygame.K_s:
+                    self.constant_movement[1] += 1
+                elif event.key == pygame.K_a:
+                    self.constant_movement[0] += -1
+                elif event.key == pygame.K_d:
+                    self.constant_movement[0] += 1
+            elif event.type == pygame.KEYUP:
+                if event.key == pygame.K_w:
+                    self.constant_movement[1] += 1
+                elif event.key == pygame.K_s:
+                    self.constant_movement[1] += -1
+                elif event.key == pygame.K_a:
+                    self.constant_movement[0] += 1
+                elif event.key == pygame.K_d:
+                    self.constant_movement[0] += -1
         self.move()
         super(Player, self).update()
 
@@ -182,7 +224,8 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
 
 
 class Wall(pygame.sprite.Sprite):  # стены, от них наверн никого наследовать не надо
-    image = pygame.transform.scale(load_image("templates/wall.jpg"), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
+    image_path = Path("data/templates/wall.jpg")
+    image = pygame.transform.scale(load_image(image_path), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
 
     def __init__(self, x, y, groups, rect_data, image=None):  # rect_data потом разберусь с ним, пока юзлес
         super().__init__(groups)
@@ -195,7 +238,8 @@ class Wall(pygame.sprite.Sprite):  # стены, от них наверн ник
 
 
 class Tile(pygame.sprite.Sprite):  # просто плитки, никакой коллизии
-    image = pygame.transform.scale(load_image("templates/grass.jpg"), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
+    image_path = Path("data/templates/grass.jpg")
+    image = pygame.transform.scale(load_image(image_path), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
 
     def __init__(self, x, y, groups, image=None):
         super().__init__(groups)
@@ -230,18 +274,100 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
         super().__init__(*groups)
 
 
+class Server:
+    def __init__(self, ip: str = DEFAULT_SERVER_IP, port: int = DEFAULT_SERVER_PORT, max_players: int = 3):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind((ip, port))
+        self.players = dict()
+        self.events = {i: list() for i in range(max_players)}
+        self._incomplete_draw_state = []
+        self._send_draw_state = pickle.dumps(self._incomplete_draw_state)
+        self.max_players = max_players
+        self.unused_player_ids = [i for i in range(max_players)]
+        self.socket.listen()
+        self.new_players_thread = threading.Thread(target=self.listen_for_new_players)
+        self.new_players_thread.start()
+        self.ip = ip
+        self.port = port
+
+    def listen_for_new_players(self):
+        listening = True
+        while listening:
+            if len(self.players) > self.max_players:
+                time.sleep(1)  # спим, чтобы не нагружать особо наверное
+                continue
+            conn, addr = self.socket.accept()
+            time.sleep(0.5)
+            # если ничего не получим в течение полусекунды, то нафиг надо
+            try:
+                conn.setblocking(False)
+                data = conn.recv(SOCKET_BUFFER_SIZE)  # выбросит исключение, если сюда ничего не отправили
+                conn.setblocking(True)
+            except BlockingIOError:
+                continue
+            if data != b'connect':
+                continue
+            self.players[addr] = conn
+            conn.send(b'connect')
+            next_player_id = min(self.unused_player_ids)
+            self.unused_player_ids.remove(next_player_id)
+            conn.send(next_player_id.to_bytes(64, 'little'))
+            thread = threading.Thread(target=self.handle_client, args=(conn, addr, next_player_id))
+            thread.start()
+
+    def handle_client(self, conn: socket.socket, addr: tuple[str, int], player_id: int):
+        print(f'подключился игрок № {player_id}')
+        # спаун
+        players_list.append(Player(430, 300, str(player_id), player_id, players_group))
+        connected = True
+        while connected:
+            try:
+                event_type, event_dict = pickle.loads(receive_whole_msg(conn))
+            except ConnectionResetError:
+                connected = False
+                self.unused_player_ids.append(player_id)
+                break
+            self.events[player_id].append(pygame.event.Event(event_type, event_dict))
+            for other_addr, other_conn in self.players.items():
+                try:
+                    other_conn.send(self._send_draw_state)
+                    other_conn.send(b'end')
+                except ConnectionResetError:
+                    pass
+        print(f'отключился игрок № {player_id}')
+
+    def get_events(self, player_id: int):
+        events: list = self.events[player_id].copy()
+        events.reverse()
+        self.events[player_id].clear()
+        return events
+
+    def blit(self, image_path: Path, rect: pygame.rect.Rect):
+        self._incomplete_draw_state.append({'image_path': image_path, 'rect': rect})
+
+    def draw_group(self, group: pygame.sprite.Group):
+        for sprite in group:
+            if isinstance(sprite, Pawn):
+                self.blit(sprite.image_path, sprite.rect)
+
+    def flip(self):
+        self._send_draw_state = pickle.dumps(self._incomplete_draw_state)
+        self._incomplete_draw_state.clear()
+
+
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
     return ((point_a[0] - point_b[0]) ** 2 +
             (point_a[1] - point_b[1]) ** 2) ** 0.5
 
 
 def game_loop():
+    global players_list
     exit_condition = False
     finish_game = False
 
     players_list = []
     # спаун
-    players_list.append(Player(430, 300, 'JOHN CENA', players_group))
+    # players_list.append(Player(430, 300, 'JOHN CENA', players_group))
 
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
@@ -264,18 +390,19 @@ def game_loop():
 
         draw()  # рендерим тут
 
+        server.flip()
         pygame.display.flip()
         clock.tick(75)
 
 
 def draw():
-    tile_group.draw(screen)
+    server.draw_group(tile_group)
 
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
                    *items_group.sprites(), *walls_group.sprites()]
     # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
     for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
-        screen.blit(spr.image, spr.rect)
+        server.blit(spr.image_path, spr.rect)
 
 
 def main():
@@ -312,5 +439,7 @@ if __name__ == '__main__':
     load_level("data\\maps\\dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
 
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
+
+    server = Server()
 
     main()
