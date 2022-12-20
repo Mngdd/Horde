@@ -108,18 +108,22 @@ class Player(Pawn):  # игрок
         self.equipped_weapon = None
         self.inventory = []
 
-    def move(self):
+    def move(self, server_player=False):
         super(Player, self).move()
 
-        k = pygame.key.get_pressed()
-        if k[pygame.K_w]:
-            self.movement_vector[1] += -1 * self.movement_speed
-        if k[pygame.K_s]:
-            self.movement_vector[1] += 1 * self.movement_speed
-        if k[pygame.K_a]:
-            self.movement_vector[0] += -1 * self.movement_speed
-        if k[pygame.K_d]:
-            self.movement_vector[0] += 1 * self.movement_speed
+        if server_player:
+            self.movement_vector[1] = server_player[1]
+            self.movement_vector[0] = server_player[0]
+        else:
+            k = pygame.key.get_pressed()
+            if k[pygame.K_w]:
+                self.movement_vector[1] += -1 * self.movement_speed
+            if k[pygame.K_s]:
+                self.movement_vector[1] += 1 * self.movement_speed
+            if k[pygame.K_a]:
+                self.movement_vector[0] += -1 * self.movement_speed
+            if k[pygame.K_d]:
+                self.movement_vector[0] += 1 * self.movement_speed
 
         self.collision_test()
 
@@ -242,7 +246,7 @@ def game_loop():
     exit_condition = False
     finish_game = False
 
-    players_list = []
+    players = {} #{'test': {'online': False, 'ip': -1, 'vars': [None]}}  # такой же как и в сервер пай
     # спаун
     p = Player(430, 300, 'JOHN CENA', players_group)  # игрк
 
@@ -256,11 +260,21 @@ def game_loop():
         if exit_condition:  # закрываем игру да
             return True
 
-        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ
+        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ И ПОЧИНИТЬ МЕНЯ!!!!!!!!!
+
         if mp_game:
-            players_list = parse_data(send_data(p.pos, net))  # пока отправляем только корды игркв
-            for player in players_list:
-                print(player.pos)
+            players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
+            try:
+                for player_data in players_list:
+                    if player_data[0] not in players:
+                        print(players_list)
+                        players[player_data[0]] = Player(*player_data[1], player_data[0], players_group)  # другой игрк
+                    else:
+                        players[player_data[0]].move(*player_data[1])
+                    # players_list[player_data[0]] = player_data[1]
+                    print(player_data)
+            except Exception as e:
+                print('MAIN//', e)
 
         screen.fill(BGCOLOR)
 
@@ -274,7 +288,6 @@ def game_loop():
             e.update(screen)
 
         draw()  # рендерим тут
-
 
         pygame.display.flip()
         clock.tick(75)
@@ -293,7 +306,8 @@ def parse_data(data):
     try:
         d = ast.literal_eval(data)  # TODO: тут тоже доделать
         return d
-    except:
+    except Exception as e:
+        print(e)
         return None
 
 

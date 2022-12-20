@@ -1,10 +1,11 @@
 import socket
 from _thread import *
+import ast
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-server = "127.0.0.1"  # ipv4 этого компа
-port = 5555  # от 0 до 65535, 0-1023 требует админа
+server = list(open('USER_IP.txt', 'r', encoding='utf-8'))[0].strip()  # ipv4 этого компа
+port = 5050  # от 0 до 65535, 0-1023 требует админа
 
 server_ip = socket.gethostbyname(server)  # тут чета происходит, но я не шарю
 
@@ -17,38 +18,44 @@ except socket.error as e:
 s.listen(2)  # максимум челиксов на серве
 print("Waiting for a connection")
 
-currentId = 0
-pos = ["0:50,50", "1:100,100"]  # TODO: тут загружать координаты спаунпоинтов из уровня
+user_nickname = None
+user_data = {} #{'test': {'online': False, 'ip': -1, 'vars': [None]}}
 
 
 def threaded_client(conn):  # вот тут крч мы с челом работаем
-    global currentId, pos
-    conn.send(str.encode(str(currentId)))  # чел узнает какой у него ID на сервере
-    currentId += 1  # ваще переделать это, тут типа id 0 занят, поэтому ставим 1
+    global user_nickname, user_data
+    conn.send(str.encode(str(user_nickname)))  # зачем не знаю
     reply = ''  # отве
     while True:
         try:
             data = conn.recv(4096)  # тк не знаем скока тонн информации нам пошлет юзер
-            # читаем по 2кб
-            reply = data.decode('utf-8')  # переводим полученную инфу в нормальны ебуквы
+            # читаем по 4кб
+            reply = ast.literal_eval(data.decode('utf-8'))  # переводим полученную инфу в нормальны ебуквы
             if not data:  # если челикс ливает
-                conn.send(str.encode(f"чел {currentId} ливнул"))
+                print('LEAVIN')
+                conn.send(str.encode(f"чел {user_nickname} ливнул"))
                 break
             else:
+                print('REPLYYYYY')
                 # просто обработка того, что получили. Неинтересно
-                print("Recieved: " + reply)
-                arr = reply.split(":")
-                id = int(arr[0])
-                pos[id] = reply
+                print("Recieved: ", reply)
+                # arr = reply.split(":")
+                # id = int(arr[0])
+                # pos[id] = reply
+                #
+                # if id == 0:
+                #     nid = 1
+                # if id == 1:
+                #     nid = 0
+                #
+                # reply = pos[nid][:]
+                user_data[reply[0]] = reply[1]
 
-                if id == 0: nid = 1
-                if id == 1: nid = 0
+                print("Sending: ", reply)
 
-                reply = pos[nid][:]
-                print("Sending: " + reply)
-
-            conn.sendall(str.encode(reply))  # всем рассылаем инфу(координаты)
-        except:
+            conn.sendall(str.encode(str(user_data)))  # всем рассылаем инфу(координаты)
+        except Exception as e:
+            print('SERVER//', e)
             break
 
     print("Connection Closed")
