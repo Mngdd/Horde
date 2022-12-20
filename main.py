@@ -265,14 +265,15 @@ def game_loop():
         if mp_game:
             players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
             try:
-                for player_data in players_list:
-                    if player_data[0] not in players:
-                        print(players_list)
-                        players[player_data[0]] = Player(*player_data[1], player_data[0], players_group)  # другой игрк
-                    else:
-                        players[player_data[0]].move(*player_data[1])
+                for player_nick in players_list:
+                    print(player_nick)
+                    x, y = players_list[player_nick]
+                    if players_list[player_nick] not in players:
+                        players[player_nick] = Player(x, y, player_nick, players_group)  # другой игрк
+                    players[player_nick].move((x, y))
+
                     # players_list[player_data[0]] = player_data[1]
-                    print(player_data)
+                    # print(players_list, players)
             except Exception as e:
                 print('MAIN//', e)
 
@@ -307,7 +308,7 @@ def parse_data(data):
         d = ast.literal_eval(data)  # TODO: тут тоже доделать
         return d
     except Exception as e:
-        print(e)
+        print('PARSE//', e)
         return None
 
 

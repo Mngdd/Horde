@@ -7,7 +7,7 @@ class Network:
     def __init__(self):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.host = list(open('USER_IP.txt', 'r', encoding='utf-8'))[0].strip()  # ipv4 хоста
-        self.port = 5050  # порт узнать у хоста
+        self.port = 5555  # порт узнать у хоста
         self.addr = (self.host, self.port)  # адрес хоста полный
         self.id = self.connect()
 

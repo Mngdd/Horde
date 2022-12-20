@@ -5,7 +5,7 @@ import ast
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 server = list(open('USER_IP.txt', 'r', encoding='utf-8'))[0].strip()  # ipv4 этого компа
-port = 5050  # от 0 до 65535, 0-1023 требует админа
+port = 5555  # от 0 до 65535, 0-1023 требует админа
 
 server_ip = socket.gethostbyname(server)  # тут чета происходит, но я не шарю
 
@@ -36,9 +36,8 @@ def threaded_client(conn):  # вот тут крч мы с челом работ
                 conn.send(str.encode(f"чел {user_nickname} ливнул"))
                 break
             else:
-                print('REPLYYYYY')
                 # просто обработка того, что получили. Неинтересно
-                print("Recieved: ", reply)
+                print("client replied: ", reply)
                 # arr = reply.split(":")
                 # id = int(arr[0])
                 # pos[id] = reply
@@ -49,7 +48,8 @@ def threaded_client(conn):  # вот тут крч мы с челом работ
                 #     nid = 0
                 #
                 # reply = pos[nid][:]
-                user_data[reply[0]] = reply[1]
+                print(reply[0])
+                user_data[reply[0][0]] = reply[0][1]
 
                 print("Sending: ", reply)
 
