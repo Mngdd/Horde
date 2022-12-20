@@ -13,7 +13,7 @@ class Network:
 
     def connect(self):  # тут подключаемся к серву
         self.client.connect(self.addr)
-        return self.client.recv(2048).decode()  # получаем ответ сервера (переменные всякие)
+        return self.client.recv(4096).decode()  # получаем id игрока
 
     def send(self, data):
         """
@@ -22,7 +22,7 @@ class Network:
         """
         try:
             self.client.send(str.encode(data))  # отправляем data
-            reply = self.client.recv(2048).decode()  # получаем ответ сервера (переменные всякие)
+            reply = self.client.recv(4096).decode()  # получаем ответ сервера (переменные всякие)
             return reply
         except socket.error as e:
             return str(e)

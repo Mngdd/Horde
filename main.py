@@ -3,6 +3,7 @@ import sys
 from network import Network
 import pygame
 from pytmx import load_pygame
+import ast
 
 pygame.init()
 size = (800, 600)
@@ -236,13 +237,14 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 
 def game_loop():
-    net = Network()
+    if mp_game:
+        net = Network()
     exit_condition = False
     finish_game = False
 
     players_list = []
     # спаун
-    players_list.append(Player(430, 300, 'JOHN CENA', players_group))
+    p = Player(430, 300, 'JOHN CENA', players_group)  # игрк
 
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
@@ -255,7 +257,10 @@ def game_loop():
             return True
 
         # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ
-        players_list = parse_data(send_data())
+        if mp_game:
+            players_list = parse_data(send_data(p.pos, net))  # пока отправляем только корды игркв
+            for player in players_list:
+                print(player.pos)
 
         screen.fill(BGCOLOR)
 
@@ -270,25 +275,26 @@ def game_loop():
 
         draw()  # рендерим тут
 
+
         pygame.display.flip()
         clock.tick(75)
 
 
-def send_data(self):  # TODO: ПОМЕНЯТЬ ОТПРАВЛЯЕМУЮ И ПОЛУЧАЕМУЮ ИНФОРМАЦИЮ
+def send_data(data, net):  # TODO: ПОМЕНЯТЬ ОТПРАВЛЯЕМУЮ И ПОЛУЧАЕМУЮ ИНФОРМАЦИЮ
     """
     Send position to server
     :return: None
     """
-    data = str(self.net.id) + ":" + str(self.player.x) + "," + str(self.player.y)
-    reply = self.net.send(data)
+    reply = net.send(str(data))
     return reply
+
 
 def parse_data(data):
     try:
-        d = data.split(":")[1].split(",")
-        return int(d[0]), int(d[1])
+        d = ast.literal_eval(data)  # TODO: тут тоже доделать
+        return d
     except:
-        return 0, 0
+        return None
 
 
 def draw():
@@ -324,6 +330,8 @@ def load_level(level_name):
 
 
 if __name__ == '__main__':
+    mp_game = True  # это сетевая или мультиплеер
+
     tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
     players_group = pygame.sprite.Group()
     enemies_group = pygame.sprite.Group()
@@ -332,7 +340,7 @@ if __name__ == '__main__':
     walls_group = pygame.sprite.Group()
 
     game_map = None  # просто чтоб было
-    load_level("data\\maps\\dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
+    load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
 
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 

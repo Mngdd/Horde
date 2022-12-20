@@ -17,22 +17,22 @@ except socket.error as e:
 s.listen(2)  # максимум челиксов на серве
 print("Waiting for a connection")
 
-currentId = "0"
-pos = ["0:50,50", "1:100,100"]
+currentId = 0
+pos = ["0:50,50", "1:100,100"]  # TODO: тут загружать координаты спаунпоинтов из уровня
 
 
 def threaded_client(conn):  # вот тут крч мы с челом работаем
     global currentId, pos
-    conn.send(str.encode(currentId))  # чел узнает какой у него ID на сервере
-    currentId = "1"  # ваще переделать это, тут типа id 0 занят, поэтому ставим 1
+    conn.send(str.encode(str(currentId)))  # чел узнает какой у него ID на сервере
+    currentId += 1  # ваще переделать это, тут типа id 0 занят, поэтому ставим 1
     reply = ''  # отве
     while True:
         try:
-            data = conn.recv(2048)  # тк не знаем скока тонн информации нам пошлет юзер
+            data = conn.recv(4096)  # тк не знаем скока тонн информации нам пошлет юзер
             # читаем по 2кб
             reply = data.decode('utf-8')  # переводим полученную инфу в нормальны ебуквы
             if not data:  # если челикс ливает
-                conn.send(str.encode("Goodbye"))
+                conn.send(str.encode(f"чел {currentId} ливнул"))
                 break
             else:
                 # просто обработка того, что получили. Неинтересно
