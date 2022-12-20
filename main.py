@@ -2,13 +2,8 @@ import os
 import sys
 
 import pygame
-import pygame_widgets
 from pytmx import load_pygame
-from pygame_widgets.button import Button
-from pygame_widgets.textbox import TextBox
-from pygame_widgets.toggle import Toggle
-from pygame_widgets.slider import Slider
-from pygame_widgets.dropdown import Dropdown
+from menu import StartMenu
 
 pygame.init()
 size = (800, 600)
@@ -284,91 +279,8 @@ def draw():
         screen.blit(spr.image, spr.rect)
 
 
-class StartMenu:
-    font_color = (255, 0, 0)
-    bg_color = (0, 0, 0)
-    font_size = 30
-
-    PLAY = 'play'
-    QUIT = 'quit'
-
-    def __init__(self):
-        self.running = False
-        self.play_button = Button(screen, 50, 50, 100, 30, text='Начать игру', fontSize=self.font_size, radius=5, onClick=self.play, inactiveColour=self.font_color)
-        self.settings_button = Button(screen, 50, 150, 100, 30, text='Настройки', fontSize=self.font_size, radius=5,
-                             onClick=self.settings, inactiveColour=self.font_color)
-        self.quit_button = Button(screen, 50, 200, 100, 30, text='Выйти', fontSize=self.font_size, radius=5, onClick=self.quit,
-                             inactiveColour=self.font_color)
-        font = pygame.font.SysFont('', self.font_size)
-        self.title_surface = font.render('Название игры', True, self.font_color)
-        self.result = ''
-
-    def run(self):
-        self.running = True
-        while self.running:
-            events = pygame.event.get()
-            for event in events:
-                if event.type == pygame.QUIT:
-                    self.destroy()
-            screen.fill(self.bg_color)
-            screen.blit(self.title_surface, (300, 20))
-            pygame_widgets.update(events)
-            pygame.display.update()
-        return self.result
-
-    def play(self):
-        self.result = self.PLAY
-        self.destroy()
-
-    def settings(self):
-        self.destroy()
-        SettingsMenu().run()
-
-    def quit(self):
-        self.result = self.QUIT
-        self.destroy()
-
-    def destroy(self):
-        self.running = False
-        self.settings_button.hide()
-        self.quit_button.hide()
-        self.play_button.hide()
-
-
-class SettingsMenu:
-    font_color = (255, 0, 0)
-    bg_color = (0, 0, 0)
-    font_size = 30
-
-    def __init__(self):
-        self.running = False
-        self.quit_button = Button(screen, 50, 150, 100, 30, text='Выйти', fontSize=self.font_size, radius=5, onClick=self.quit,
-                             inactiveColour=self.font_color)
-        font = pygame.font.SysFont('', self.font_size)
-        self.title_surface = font.render('Назтройки', True, self.font_color)
-        self.result = ''
-
-    def run(self):
-        self.running = True
-        while self.running:
-            events = pygame.event.get()
-            for event in events:
-                if event.type == pygame.QUIT:
-                    self.running = False
-            screen.fill(self.bg_color)
-            screen.blit(self.title_surface, (300, 20))
-            pygame_widgets.update(events)
-            pygame.display.update()
-        del self.quit_button
-        return self.result
-
-    def quit(self):
-        self.running = False
-        StartMenu().run()
-
-
 def main():
-    action = StartMenu().run()
+    action = StartMenu(screen).run()
     if action == StartMenu.PLAY:
         done = game_loop()
         while not done:
