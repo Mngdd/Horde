@@ -19,7 +19,7 @@ clock = pygame.time.Clock()
 
 class Client:
     def __init__(self, server_ip: str = DEFAULT_SERVER_IP, server_port: int = DEFAULT_SERVER_PORT):
-        self._conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._conn = socket.socket(socket.AF_INET, SOCKET_PROTOCOL)
         self._conn.connect((server_ip, server_port))  # выбрасывает ConnectionRefusedError, если не получается
         self._conn.send(b'connect')
         if self._conn.recv(SOCKET_BUFFER_SIZE) != b'connect':
@@ -52,7 +52,6 @@ def draw():
         rect: pygame.rect.Rect = instruction['rect']
         image: pygame.surface.Surface = images_map[image_path]
         screen.blit(image, rect)
-        # print('draw')
 
 
 def game_loop():

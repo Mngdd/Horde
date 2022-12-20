@@ -14,6 +14,7 @@ from pathlib import Path
 DEFAULT_SERVER_IP = '127.0.0.1'
 DEFAULT_SERVER_PORT = 5070
 SOCKET_BUFFER_SIZE = 4096
+SOCKET_PROTOCOL = socket.SOCK_STREAM
 
 CMD_CREATE = 0
 CMD_SYNC = 1
@@ -265,7 +266,7 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
 
 class Server:
     def __init__(self, ip: str = DEFAULT_SERVER_IP, port: int = DEFAULT_SERVER_PORT, max_players: int = 3):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket = socket.socket(socket.AF_INET, SOCKET_PROTOCOL)
         self.socket.bind((ip, port))
         self.players = dict()
         self.events = {i: list() for i in range(max_players)}
@@ -276,6 +277,8 @@ class Server:
         self.socket.listen()
         self.new_players_thread = threading.Thread(target=self.listen_for_new_players)
         self.new_players_thread.start()
+        self.handle_outgoing_thread = threading.Thread(target=self.handle_outgoing)
+        self.handle_outgoing_thread.start()
         self.ip = ip
         self.port = port
 
@@ -312,18 +315,23 @@ class Server:
         while connected:
             try:
                 event_type, event_dict = pickle.loads(receive_whole_msg(conn))
+                print(event_type)
             except ConnectionResetError:
                 connected = False
                 self.unused_player_ids.append(player_id)
                 break
-            self.events[player_id].append(pygame.event.Event(event_type, event_dict))
+            else:
+                self.events[player_id].append(pygame.event.Event(event_type, event_dict))
+        print(f'отключился игрок № {player_id}')
+
+    def handle_outgoing(self):
+        while True:
             for other_addr, other_conn in self.players.items():
                 try:
                     other_conn.send(self._send_draw_state)
                     other_conn.send(b'end')
                 except ConnectionResetError:
                     pass
-        print(f'отключился игрок № {player_id}')
 
     def get_events(self, player_id: int):
         events: list = self.events[player_id].copy()
@@ -426,7 +434,7 @@ if __name__ == '__main__':
     walls_group = pygame.sprite.Group()
 
     game_map = None  # просто чтоб было
-    load_level("data\\maps\\dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
+    load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
 
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 
