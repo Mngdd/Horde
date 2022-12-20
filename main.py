@@ -3,6 +3,7 @@ import sys
 from network import Network
 import pygame
 from pytmx import load_pygame
+from menu import StartMenu
 import ast
 
 pygame.init()
@@ -323,13 +324,15 @@ def draw():
 
 
 def main():
-    done = game_loop()
-    while not done:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                done = True
-            if event.type == pygame.K_SPACE:  # TODO: сделать выход из гейм лупа сюда!
-                game_loop()
+    action = StartMenu(screen).run()
+    if action == StartMenu.PLAY:
+        done = game_loop()
+        while not done:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    done = True
+                if event.type == pygame.K_SPACE:  # TODO: сделать выход из гейм лупа сюда!
+                    game_loop()
 
 
 def load_level(level_name):
