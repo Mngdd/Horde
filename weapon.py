@@ -1,11 +1,15 @@
 import pygame
 import math
 import random
-from main import Projectile
+from projectile import Projectile
+from main_n import projectiles_group
 
 class Weapon(pygame.sprite.Sprite):
     """
-    оружие
+    оружия: 
+    дальники: пистолет, шелли, байрон ...
+    ближники: катана, топор, палка ...
+    написаны в порядке убывания, типо катана самый мощный ближник и тп
     """
     def __init__(self, *groups):
         super().__init__(*groups)
@@ -72,8 +76,7 @@ class Gun(Weapon):
             corner = math.radians(random.random()*self.spread - self.spread/2)
             projDir = super().rotate_vector(direction, corner)
             # тут кароче надо как-то вызвать уже projectile  
-            Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0))
-            # это кнш не совсем то, надо доделать
+            bullet = Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0), projectiles_group)
 
 
 class SpreadGun(Weapon):
@@ -104,7 +107,52 @@ class SpreadGun(Weapon):
                 corner = math.radians(arcDifference*proj - self.spread/2)
                 projDir = super().rotate_vector(direction, corner)
             # тут кароче надо как-то вызвать уже projectile  
-            Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0))
-            # это кнш не совсем то, надо доделать
-                
+            bullet = Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0), projectiles_group)
 
+
+class FreezeGun(Weapon):
+    # Доделать торможение!!!
+    def __init__(self):
+        super.__init__()
+        self.weapon_cooldown = 50 
+        # мне кажется нужно тут делать большую задержку, тип оружие имбовое и ему нужно много времени
+        # но урона у врагов он забирает тип много
+        self.spread = 5  # разброс маленький
+        # кароче будет работать как у байрона в бравл старсе
+    
+    def shoot(self, user, mousePos):
+        currentTime = pygame.time.get_ticks()
+        if self.munition == 0: # тип перезарядка
+            if currentTime - self.last_shot > self.munitionTime:
+                self.munition = 100
+            else:
+                return
+        
+        self.munition -= 1 # минус патрон
+        if currentTime - self.last_shot > self.weapon_cooldown:
+            direction = (mousePos[0] - user.pos[0], mousePos[1] - user.pos[1]) \
+                if mousePos != user.pos else (1, 1)
+            self.last_shot = currentTime
+            corner = math.radians(random.random()*self.spread - self.spread/2)
+            projDir = super().rotate_vector(direction, corner)
+            # тут кароче надо как-то вызвать уже projectile  
+            bullet = Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0), projectiles_group)
+
+
+class Stick(Weapon):
+    """
+    самый юзлесс ближник, думаю, можно давать его в начале игры
+    """
+    def __init__(self):
+        super.__init__()
+        ...
+
+class Katana(Weapon):
+    def __init__(self):
+        super.__init__()
+        ...
+
+class Axe(Weapon):
+    def __init__(self):
+        super.__init__()
+        ...
