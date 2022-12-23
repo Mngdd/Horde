@@ -5,6 +5,7 @@ import pygame
 from pytmx import load_pygame
 from menu import StartMenu
 import ast
+import random
 
 pygame.init()
 size = (800, 600)
@@ -247,15 +248,15 @@ def game_loop():
     exit_condition = False
     finish_game = False
 
-    players = {} #{'test': {'online': False, 'ip': -1, 'vars': [None]}}  # такой же как и в сервер пай
+    players = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}  # такой же как и в сервер пай
     # спаун
     p = Player(430, 300, 'JOHN CENA', players_group)  # игрк
 
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
-    # for _ in range(6):
-    #     Enemy(random.randint(0, screen.get_width()),
-    #           random.randint(0, screen.get_height()), enemies_group)
+    for _ in range(6):
+        Enemy(random.randint(0, screen.get_width()),
+              random.randint(0, screen.get_height()), enemies_group)
 
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
@@ -265,9 +266,9 @@ def game_loop():
 
         if mp_game:
             players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
+            print(players_list)
             try:
                 for player_nick in players_list:
-                    print(player_nick)
                     x, y = players_list[player_nick]
                     if players_list[player_nick] not in players:
                         players[player_nick] = Player(x, y, player_nick, players_group)  # другой игрк
