@@ -114,8 +114,8 @@ class Player(Pawn):  # игрок
         super(Player, self).move()
 
         if server_player:
-            self.movement_vector[1] = server_player[1]
-            self.movement_vector[0] = server_player[0]
+            self.pos = server_player
+            print('\t', self.pos)
         else:
             k = pygame.key.get_pressed()
             if k[pygame.K_w]:
@@ -266,16 +266,14 @@ def game_loop():
 
         if mp_game:
             players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
-            print(players_list)
             try:
                 for player_nick in players_list:
+                    if player_nick == p.nick:
+                        continue
                     x, y = players_list[player_nick]
-                    if players_list[player_nick] not in players:
+                    if player_nick not in players:
                         players[player_nick] = Player(x, y, player_nick, players_group)  # другой игрк
-                    players[player_nick].move((x, y))
-
-                    # players_list[player_data[0]] = player_data[1]
-                    # print(players_list, players)
+                    players[player_nick].move([x, y])
             except Exception as e:
                 print('MAIN//', e)
 
@@ -308,6 +306,7 @@ def send_data(data, net):  # TODO: ПОМЕНЯТЬ ОТПРАВЛЯЕМУЮ И 
 def parse_data(data):
     try:
         d = ast.literal_eval(data)  # TODO: тут тоже доделать
+        # print('server replied:', d)
         return d
     except Exception as e:
         print('PARSE//', e)
