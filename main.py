@@ -178,6 +178,7 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
         self.image = Pawn.image  # тк это базовый класс, его не должно быть в игре
         self.rect = self.image.get_rect()
         self.pos = [x, y]
+        self.rect.topleft = self.pos
         self.name = 'PLACEHOLDER'
 
         # скорость нужна чтобы предметы разлетались в разные стороны(например при смерти персонажа)
@@ -235,6 +236,25 @@ class Weapon(pygame.sprite.Sprite):
 class Projectile(pygame.sprite.Sprite):  # пуля сама
     def __init__(self, *groups):
         super().__init__(*groups)
+
+
+class Shop(pygame.sprite.Group):
+    def __init__(self, items_coords: list[tuple[int, int]]):
+        super(Shop, self).__init__()
+        self.items_coords = items_coords
+        self.items = []
+        self.update_items()
+
+    def update_items(self):
+        for item in self.items:
+            item.kill()
+        self.items = [Item(x * 32, y * 32, self) for x, y in self.items_coords]
+
+
+class ShopItem(Item):
+    def __init__(self, x, y, shop: Shop):
+        super(ShopItem, self).__init__(x, y, shop)
+
 
 
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
@@ -317,7 +337,7 @@ def draw():
     tile_group.draw(screen)
 
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
-                   *items_group.sprites(), *walls_group.sprites()]
+                   *items_group.sprites(), *walls_group.sprites(), *shop.sprites()]
     # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
     for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
         screen.blit(spr.image, spr.rect)
@@ -336,15 +356,25 @@ def main():
 
 
 def load_level(level_name):
-    global game_map
+    global game_map, shop
     game_map = load_pygame(level_name)
-    for layer in game_map.visible_layers:
+    for layer_number, layer in enumerate(game_map.visible_layers):
         if layer.name == 'floor':
             for x, y, surf in layer.tiles():
                 Tile(x * 32, y * 32, tile_group, surf)
         if layer.name == 'walls':
             for x, y, surf in layer.tiles():
                 Wall(x * 32, y * 32, walls_group, [x * 32, y * 32, surf.get_width(), surf.get_height()], surf)
+        if layer.name == 'shop':
+            shop_items_coords = []
+            for x, y, surf in layer.tiles():
+                Tile(x * 32, y * 32, tile_group, surf)
+                try:
+                    if game_map.get_tile_properties(x, y, layer_number).get('shop_item', False):
+                        shop_items_coords.append((x, y))
+                except AttributeError:
+                    pass
+            shop = Shop(shop_items_coords)
 
 
 if __name__ == '__main__':
@@ -356,6 +386,7 @@ if __name__ == '__main__':
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
+    shop = None
 
     game_map = None  # просто чтоб было
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
