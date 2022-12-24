@@ -76,7 +76,7 @@ class Gun(Weapon):
             corner = math.radians(random.random()*self.spread - self.spread/2)
             projDir = super().rotate_vector(direction, corner)
             # тут кароче надо как-то вызвать уже projectile  
-            bullet = Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0), projectiles_group)
+            bullet = Projectile(user.pos, super().normalize_vector(projDir), 15, 1000, (255, 0, 0), projectiles_group)
 
 
 class SpreadGun(Weapon):
@@ -136,23 +136,35 @@ class FreezeGun(Weapon):
             corner = math.radians(random.random()*self.spread - self.spread/2)
             projDir = super().rotate_vector(direction, corner)
             # тут кароче надо как-то вызвать уже projectile  
-            bullet = Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0), projectiles_group)
+            bullet = Projectile(user.pos, super().normalize_vector(projDir), 10, 1000, (255, 0, 0), projectiles_group)
 
 
 class Stick(Weapon):
     """
     самый юзлесс ближник, думаю, можно давать его в начале игры
+    (типо при спавне игрока валяется рядом или что-то такое?)
+    снимает мало хп, дальность средняя
     """
     def __init__(self):
         super.__init__()
         ...
 
 class Katana(Weapon):
+    """
+    самый мощни, снимает много хп и дальность самая большая из ближников
+    """
     def __init__(self):
         super.__init__()
         ...
 
 class Axe(Weapon):
+    """
+    средняк, лучше палки,хуже катаны
+    дальность меньше палки, но урона снимает много
+    """
     def __init__(self):
         super.__init__()
         ...
+
+
+
