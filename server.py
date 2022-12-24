@@ -30,26 +30,15 @@ def threaded_client(conn):  # вот тут крч мы с челом работ
         try:
             data = conn.recv(4096)  # тк не знаем скока тонн информации нам пошлет юзер
             # читаем по 4кб
-            reply = ast.literal_eval(data.decode('utf-8'))  # переводим полученную инфу в нормальны ебуквы
             if not data:  # если челикс ливает
                 print('LEAVIN')
                 conn.send(str.encode(f"чел {user_nickname} ливнул"))
                 break
             else:
+                reply = ast.literal_eval(data.decode('utf-8'))  # переводим полученную инфу в нормальны ебуквы
                 # просто обработка того, что получили. Неинтересно
                 print("client replied: ", reply)
-                # arr = reply.split(":")
-                # id = int(arr[0])
-                # pos[id] = reply
-                #
-                # if id == 0:
-                #     nid = 1
-                # if id == 1:
-                #     nid = 0
-                #
-                # reply = pos[nid][:]
-                print(reply[0])
-                user_data[reply[0][0]] = reply[0][1]
+                user_data[reply[0]] = reply[1]
 
                 print("Sending: ", reply)
 
