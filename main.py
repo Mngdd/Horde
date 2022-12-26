@@ -6,6 +6,8 @@ from pytmx import load_pygame
 from menu import StartMenu
 import ast
 import random
+from perks import *
+from trinkets import *
 
 pygame.init()
 size = (800, 600)
@@ -110,6 +112,12 @@ class Player(Pawn):  # игрок
         self.equipped_weapon = None
         self.inventory = []
 
+        self.multipliers = {'STRENGTH_P': 1, 'STRENGTH_M': 1}  # p плюс, m умножить потом перепишу
+        self.trinkets = all_trinkets
+        self.perks = []
+        # с перками потом еще перепишу, а то чета отдельный список хранить в котором умножают отдельные
+        # переменные, как-то неоч, тк есть еще и просто список перков(
+
     def move(self, server_player=False):
         super(Player, self).move()
 
@@ -133,6 +141,9 @@ class Player(Pawn):  # игрок
         self.prev_pos = self.pos
         self.move()
         super(Player, self).update()
+
+    def new_perk_add(self, perk):
+        perk.use(self)
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
@@ -262,7 +273,7 @@ def game_loop():
         if exit_condition:  # закрываем игру да
             return True
 
-        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ И ПОЧИНИТЬ МЕНЯ!!!!!!!!!
+        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ
 
         if mp_game:
             players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
