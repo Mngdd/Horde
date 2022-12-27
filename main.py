@@ -94,6 +94,9 @@ class Pawn(pygame.sprite.Sprite):
     def fire(self):
         pass  # стрелят
 
+    def get_data(self):
+        return {'POS': self.pos, 'HP': self.health, 'EQ_WEAPON': self.equipped_weapon}
+
 
 class Player(Pawn):  # игрок
     image = pygame.transform.scale(load_image("templates/arrow.png"), (32, 32))
@@ -147,6 +150,11 @@ class Player(Pawn):  # игрок
 
     def new_perk_add(self, perk):
         perk.use(self)
+
+    def get_data(self):
+        d = super().get_data()
+        d['NICK'] = self.nick
+        return d
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
@@ -262,11 +270,11 @@ def game_loop():
     exit_condition = False
     finish_game = False
 
-    players = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}  # тут все игроки
+    players = {}  # содержит класс игрока по никам
 
     # спаун
-    p = Player(430, 300, 'lol CENA', players_group)  # игрк
-    players[p.nick] = p.pos
+    p = Player(430, 300, my_nickname, players_group)  # игрк
+    players[p.nick] = p
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
     for _ in range(6):
@@ -278,26 +286,30 @@ def game_loop():
             return True
 
         # КАРОЧ ОТПРАВЛЯЮ ОТЕДЛЬНО СЛОВАРЬ ИГРОКОВ ОТДЕЛЬНО СЛОВАРЬ ВРАГОВ
-        to_send = [p]  # сюда вписывать то, что клиент отправляет на сервер: себя и все что с ним связано
 
         if mp_game:
             if im_a_host:  # если игрок хостит сервер - он и обрабатывает всю инфу
                 # и посылает через сервер другим пепликсам
-                reply = parse_data(send_data(net, 'HOST', players, []))  # отправляем на серв обработанную инфу
+                to_send = [players[nick].get_data() for nick in players]
+                reply = parse_data(send_data(net, 'HOST', to_send))  # отправляем на серв обработанную инфу
+                # print('HOST', reply)
             else:  # игрок - клиент(подключился на чужой сервер)
+                to_send = [p.get_data()]  # сюда вписывать то, что отправляем на сервер: себя и все что с ним связано
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
-                for e in reply[1]:
-                    print(e)
+                # print('USER', reply)
             try:  # обновляем инфу об игроках
-                for player_nick in reply[0]:
-                    if player_nick == p.nick:
+                print(reply[0])
+
+                for p_data in reply[0]:
+                    if p_data['NICK'] == p.nick:
                         continue
-                    x, y = reply[player_nick]
-                    if player_nick not in players:
-                        players[player_nick] = Player(x, y, player_nick, players_group)  # другой игрк
-                    players[player_nick].move([x, y])
+                    x, y = reply[0][p_data['NICK']]['POS']
+                    if p_data['NICK'] not in players:
+                        players[p_data['NICK']] = Player(x, y, p_data['NICK'], players_group)  # другой игрк
+                    players[p_data['NICK']].move([x, y])
+
             except Exception as e:
-                print('MAIN//', e)
+                print('MAIN//', e, reply)
 
         screen.fill(BGCOLOR)
 
@@ -313,7 +325,7 @@ def game_loop():
         draw()  # рендерим тут
 
         pygame.display.flip()
-        clock.tick(75)
+        clock.tick(60)
 
 
 def send_data(net, *data):  # TODO: добавить ожидание перед отключение(чтоб не кикало за любой пустой ответ)
@@ -322,8 +334,8 @@ def send_data(net, *data):  # TODO: добавить ожидание перед
     :return: None
     """
     reply = net.send(str(data))
-    # if reply == '':
-    #     raise Exception('ОТВЕТА НЕТ. ОТКЛЮЧЕН')
+    if reply == '':
+        raise Exception('ОТВЕТА НЕТ. ОТКЛЮЧЕН')
     return reply
 
 
@@ -371,9 +383,11 @@ def load_level(level_name):
                 Wall(x * 32, y * 32, walls_group, [x * 32, y * 32, surf.get_width(), surf.get_height()], surf)
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     mp_game = True  # это сетевая или мультиплеер
     im_a_host = False  # False # чиста для копипаста фолс
+    my_nickname = 'PLAYER 12'
+
     if im_a_host:
         p = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
 

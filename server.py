@@ -37,7 +37,7 @@ class Server:
             try:
                 data = conn.recv(4096)  # тк не знаем скока тонн информации нам пошлет юзер
                 # читаем по 4кб
-                print("\tclient replied: ", data)
+                # print("\tclient replied: ", data)
                 if not data:  # если челикс ливает
                     print('LEAVIN')
                     conn.send(str.encode(f"чел {self.user_nickname} ливнул"))
@@ -47,20 +47,21 @@ class Server:
 
                     # просто обработка того, что получили. Неинтересно
                     usr = reply.pop(0)
-                    for p_nick in reply[0]:  # обновляем игроков
-                        self.user_data[p_nick] = reply[0][p_nick]
 
                     if usr == 'HOST':  # обработанные хостом данные
-                        self.enemy_data = reply[1]
+                        for p_data in reply[0]:  # обновляем игроков
+                            self.user_data[p_data['NICK']] = p_data
                     elif usr == 'CLIENT':  # клиент посылает инфу о себе, обновляем у себя
-                        pass
+                        print(reply[0][0])
+                        print(reply[0][0]['NICK'])
+                        self.user_data[reply[0][0]['NICK']] = reply[0][0]
                     else:
                         raise Exception('UNEXPECTED USER')
 
-                print("Sending: ", reply)
+                # print("Sending: ", reply)
                 conn.sendall(str.encode(str([self.user_data, self.enemy_data])))  # всем рассылаем инфу(координаты)
             except Exception as e:
-                print('\tSERVER//', e)
+                print('\tSERVER//', e, data)
                 break
 
         print("\tConnection Closed")
