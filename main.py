@@ -265,7 +265,7 @@ def game_loop():
     players = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}  # тут все игроки
 
     # спаун
-    p = Player(430, 300, 'JOHN CENA', players_group)  # игрк
+    p = Player(430, 300, 'lol CENA', players_group)  # игрк
     players[p.nick] = p.pos
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
@@ -283,9 +283,9 @@ def game_loop():
         if mp_game:
             if im_a_host:  # если игрок хостит сервер - он и обрабатывает всю инфу
                 # и посылает через сервер другим пепликсам
-                reply = parse_data(send_data(net, players, []))  # отправляем на серв обработанную инфу
+                reply = parse_data(send_data(net, 'HOST', players, []))  # отправляем на серв обработанную инфу
             else:  # игрок - клиент(подключился на чужой сервер)
-                reply = parse_data(send_data(net, to_send))  # отправляем инфу и получаем ответ серва
+                reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
                 for e in reply[1]:
                     print(e)
             try:  # обновляем инфу об игроках
@@ -373,7 +373,7 @@ def load_level(level_name):
 
 if __name__ == '__main__':
     mp_game = True  # это сетевая или мультиплеер
-    im_a_host = True  # False # чиста для копипаста фолс
+    im_a_host = False  # False # чиста для копипаста фолс
     if im_a_host:
         p = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
 

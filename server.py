@@ -10,6 +10,8 @@ class Server:
         self.port = port  # от 0 до 65535, 0-1023 требует админа
         self.server_ip = socket.gethostbyname(self.server)  # тут чета происходит, но я не шарю
 
+        self.is_port_in_use(self.port)  # проверяем, занят ли порт
+
         try:
             self.s.bind((self.server, self.port))  # связываем сокет и порт
         except socket.error as e:
@@ -21,6 +23,12 @@ class Server:
         self.user_data = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}
         self.enemy_data = None  # тупа спрайт группа капец я умный да
         self.main()
+
+    def is_port_in_use(self, port):
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('localhost', port)) == 0:
+                raise Exception('PORT ALREADY IN USE')
 
     def threaded_client(self, conn):  # вот тут крч мы с челом работаем
         conn.send(str.encode(str(self.user_nickname)))  # зачем не знаю
@@ -35,14 +43,21 @@ class Server:
                     conn.send(str.encode(f"чел {self.user_nickname} ливнул"))
                     break
                 else:
-                    reply = ast.literal_eval(data.decode('utf-8'))  # переводим полученную инфу в нормальны ебуквы
+                    reply = list(ast.literal_eval(data.decode('utf-8')))  # переводим полученную инфу в нормальны ебуквы
 
                     # просто обработка того, что получили. Неинтересно
-                    for p_nick in reply[0]:
+                    usr = reply.pop(0)
+                    for p_nick in reply[0]:  # обновляем игроков
                         self.user_data[p_nick] = reply[0][p_nick]
 
-                    print("Sending: ", reply)
+                    if usr == 'HOST':  # обработанные хостом данные
+                        self.enemy_data = reply[1]
+                    elif usr == 'CLIENT':  # клиент посылает инфу о себе, обновляем у себя
+                        pass
+                    else:
+                        raise Exception('UNEXPECTED USER')
 
+                print("Sending: ", reply)
                 conn.sendall(str.encode(str([self.user_data, self.enemy_data])))  # всем рассылаем инфу(координаты)
             except Exception as e:
                 print('\tSERVER//', e)
@@ -60,4 +75,4 @@ class Server:
 
 
 if __name__ == "__main__":
-    mp_server = Server(5555, 2)
+    mp_server = Server(int(list(open('USER_IP.txt', 'r', encoding='utf-8'))[1].strip()), 2)
