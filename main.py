@@ -6,6 +6,11 @@ from pytmx import load_pygame
 from menu import StartMenu
 import ast
 import random
+from perks import *
+from trinkets import *
+from subprocess import Popen
+
+# прикольно так накидал конечн
 
 pygame.init()
 size = (800, 600)
@@ -110,6 +115,12 @@ class Player(Pawn):  # игрок
         self.equipped_weapon = None
         self.inventory = []
 
+        self.multipliers = {'STRENGTH_P': 1, 'STRENGTH_M': 1}  # p плюс, m умножить потом перепишу
+        self.trinkets = all_trinkets
+        self.perks = []
+        # с перками потом еще перепишу, а то чета отдельный список хранить в котором умножают отдельные
+        # переменные, как-то неоч, тк есть еще и просто список перков(
+
     def move(self, server_player=False):
         super(Player, self).move()
 
@@ -133,6 +144,9 @@ class Player(Pawn):  # игрок
         self.prev_pos = self.pos
         self.move()
         super(Player, self).update()
+
+    def new_perk_add(self, perk):
+        perk.use(self)
 
 
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
@@ -268,10 +282,11 @@ def game_loop():
     exit_condition = False
     finish_game = False
 
-    players = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}  # такой же как и в сервер пай
+    players = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}  # тут все игроки
+
     # спаун
     p = Player(430, 300, 'JOHN CENA', players_group)  # игрк
-
+    players[p.nick] = p.pos
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
     for _ in range(6):
@@ -282,15 +297,22 @@ def game_loop():
         if exit_condition:  # закрываем игру да
             return True
 
-        # TODO: ПОЛУЧАТЬ ВРАГОВ ТОЖЕ И ПОЧИНИТЬ МЕНЯ!!!!!!!!!
+        # КАРОЧ ОТПРАВЛЯЮ ОТЕДЛЬНО СЛОВАРЬ ИГРОКОВ ОТДЕЛЬНО СЛОВАРЬ ВРАГОВ
+        to_send = [p]  # сюда вписывать то, что клиент отправляет на сервер: себя и все что с ним связано
 
         if mp_game:
-            players_list = parse_data(send_data([p.nick, p.pos], net))  # пока отправляем только корды игркв
-            try:
-                for player_nick in players_list:
+            if im_a_host:  # если игрок хостит сервер - он и обрабатывает всю инфу
+                # и посылает через сервер другим пепликсам
+                reply = parse_data(send_data(net, players, []))  # отправляем на серв обработанную инфу
+            else:  # игрок - клиент(подключился на чужой сервер)
+                reply = parse_data(send_data(net, to_send))  # отправляем инфу и получаем ответ серва
+                for e in reply[1]:
+                    print(e)
+            try:  # обновляем инфу об игроках
+                for player_nick in reply[0]:
                     if player_nick == p.nick:
                         continue
-                    x, y = players_list[player_nick]
+                    x, y = reply[player_nick]
                     if player_nick not in players:
                         players[player_nick] = Player(x, y, player_nick, players_group)  # другой игрк
                     players[player_nick].move([x, y])
@@ -314,12 +336,14 @@ def game_loop():
         clock.tick(75)
 
 
-def send_data(data, net):  # TODO: ПОМЕНЯТЬ ОТПРАВЛЯЕМУЮ И ПОЛУЧАЕМУЮ ИНФОРМАЦИЮ
+def send_data(net, *data):  # TODO: добавить ожидание перед отключение(чтоб не кикало за любой пустой ответ)
     """
     Send position to server
     :return: None
     """
     reply = net.send(str(data))
+    # if reply == '':
+    #     raise Exception('ОТВЕТА НЕТ. ОТКЛЮЧЕН')
     return reply
 
 
@@ -379,6 +403,9 @@ def load_level(level_name):
 
 if __name__ == '__main__':
     mp_game = True  # это сетевая или мультиплеер
+    im_a_host = True  # False # чиста для копипаста фолс
+    if im_a_host:
+        p = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
 
     tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
     players_group = pygame.sprite.Group()
