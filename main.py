@@ -3,7 +3,7 @@ import sys
 from network import Network
 import pygame
 from pytmx import load_pygame
-from menu import StartMenu
+from menu import *
 import ast
 import random
 from perks import *
@@ -121,6 +121,8 @@ class Player(Pawn):  # игрок
         # с перками потом еще перепишу, а то чета отдельный список хранить в котором умножают отдельные
         # переменные, как-то неоч, тк есть еще и просто список перков(
 
+        self.overlay_open = False  # для магаза, меню паузы может
+
     def move(self, server_player=False):
         super(Player, self).move()
 
@@ -140,9 +142,21 @@ class Player(Pawn):  # игрок
 
         self.collision_test()
 
+    def check_shop(self):
+        global shop
+        if pygame.key.get_pressed()[pygame.K_e] and not self.overlay_open:
+            if shop.can_access(self):
+                shop.open_overlay()
+                self.overlay_open = True
+        if pygame.key.get_pressed()[pygame.K_ESCAPE] and self.overlay_open:
+            shop.close_overlay()
+            self.overlay_open = False
+
     def update(self, *args):
-        self.prev_pos = self.pos
-        self.move()
+        if not self.overlay_open:
+            self.prev_pos = self.pos
+            self.move()
+        self.check_shop()
         super(Player, self).update()
 
     def new_perk_add(self, perk):
@@ -252,9 +266,9 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
         super().__init__(*groups)
 
 
-class Shop(pygame.sprite.Group):
+class InLevelShop(pygame.sprite.Group):
     def __init__(self, items_coords: list[tuple[int, int]]):
-        super(Shop, self).__init__()
+        super(InLevelShop, self).__init__()
         self.items_coords = items_coords
         self.items = []
         self.update_items()
@@ -266,9 +280,56 @@ class Shop(pygame.sprite.Group):
 
 
 class ShopItem(Item):
-    def __init__(self, x, y, shop: Shop):
-        super(ShopItem, self).__init__(x, y, shop)
+    def __init__(self, x, y, in_level_shop: InLevelShop):
+        super(ShopItem, self).__init__(x, y, in_level_shop)
 
+
+class ScreenDarken(WidgetBase):
+    def __init__(self):
+        super(ScreenDarken, self).__init__(screen, 0, 0, size[0], size[1])
+        self.rect = pygame.rect.Rect(0, 0, size[0], size[1])
+        self.surf = pygame.surface.Surface(size).convert_alpha()
+        pygame.draw.rect(self.surf, (0, 0, 0, 127), self.rect)
+        self.hidden = False
+
+    def draw(self):
+        if not self.hidden:
+            self.win.blit(self.surf, (0, 0))
+
+    def listen(self, events):
+        pass
+
+    def hide(self):
+        self.hidden = True
+
+    def show(self):
+        self.hidden = False
+
+
+class Shop(pygame.sprite.Sprite):  # от спрайта наследование чтобы когда камера будет работало
+    def __init__(self, x: int, y: int, closed: bool = True):
+        super(Shop, self).__init__()
+        self.rect = pygame.rect.Rect(x - 32, y - 32, 32 * 3, 32 * 3)  # область 3x3 тайла вокруг
+        self.overlay_widgets = [
+            ScreenDarken(),
+            Button(screen, 600, 500, 70, 30, text='Пистолет 1'),
+            ButtonArray(screen, 60, 40, 500, 400, (3, 7))
+        ]
+        if closed:
+            self.close_overlay()
+
+    def can_access(self, player: Player):
+        return player.rect.colliderect(self.rect)
+
+    def open_overlay(self):
+        print('открыт магаз')
+        for widget in self.overlay_widgets:
+            widget.show()
+
+    def close_overlay(self):
+        print('закрыт магаз')
+        for widget in self.overlay_widgets:
+            widget.hide()
 
 
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
@@ -321,7 +382,8 @@ def game_loop():
 
         screen.fill(BGCOLOR)
 
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == pygame.QUIT:
                 exit_condition = True
 
@@ -331,6 +393,7 @@ def game_loop():
             e.update(screen)
 
         draw()  # рендерим тут
+        pygame_widgets.update(events)  # чтобы интерфейс поверх всего рисовался
 
         pygame.display.flip()
         clock.tick(75)
@@ -361,7 +424,7 @@ def draw():
     tile_group.draw(screen)
 
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
-                   *items_group.sprites(), *walls_group.sprites(), *shop.sprites()]
+                   *items_group.sprites(), *walls_group.sprites(), *in_level_shop.sprites()]
     # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
     for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
         screen.blit(spr.image, spr.rect)
@@ -380,7 +443,7 @@ def main():
 
 
 def load_level(level_name):
-    global game_map, shop
+    global game_map, in_level_shop, shop
     game_map = load_pygame(level_name)
     for layer_number, layer in enumerate(game_map.visible_layers):
         if layer.name == 'floor':
@@ -389,6 +452,11 @@ def load_level(level_name):
         if layer.name == 'walls':
             for x, y, surf in layer.tiles():
                 Wall(x * 32, y * 32, walls_group, [x * 32, y * 32, surf.get_width(), surf.get_height()], surf)
+                try:
+                    if game_map.get_tile_properties(x, y, layer_number).get('shop', False):
+                        shop = Shop(x * 32, y * 32)
+                except AttributeError:
+                    pass
         if layer.name == 'shop':
             shop_items_coords = []
             for x, y, surf in layer.tiles():
@@ -398,7 +466,7 @@ def load_level(level_name):
                         shop_items_coords.append((x, y))
                 except AttributeError:
                     pass
-            shop = Shop(shop_items_coords)
+            in_level_shop = InLevelShop(shop_items_coords)
 
 
 if __name__ == '__main__':
@@ -413,7 +481,8 @@ if __name__ == '__main__':
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
-    shop = None
+    in_level_shop = None
+    shop: Shop = None
 
     game_map = None  # просто чтоб было
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
