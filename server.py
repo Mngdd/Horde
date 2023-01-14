@@ -1,4 +1,6 @@
 import socket
+import threading
+# import multiprocessing
 from _thread import *
 import ast
 
@@ -48,18 +50,22 @@ class Server:
 
                     # просто обработка того, что получили. Неинтересно
                     usr = reply.pop(0)
+                    # TODO: из-за того что хост и клиент одновременно могут послать инфу о себе,
+                    #  мы можем потерять инфу клиента потому что хост ее перезаписал
+                    conn.sendall(str.encode(str([self.user_data, self.enemy_data])))  # всем рассылаем инфу(координаты)
 
-                    if usr == 'HOST':  # обработанные хостом данные
-                        for p_data in reply[0]:  # обновляем игроков
-                            self.user_data[p_data['NICK']] = p_data
-                    elif usr == 'CLIENT':  # клиент посылает инфу о себе, обновляем у себя
-                        self.user_data[reply[0][0]['NICK']] = reply[0][0]
-                        # print('CLIEND SENT:', reply[0][0])
-                    else:
-                        raise Exception('UNEXPECTED USER')
-
-                # print("Sending: ", reply)
-                conn.sendall(str.encode(str([self.user_data, self.enemy_data])))  # всем рассылаем инфу(координаты)
+                    with locker:
+                        if usr == 'HOST':  # обработанные хостом данные
+                            for p_data in reply[0]:  # обновляем игроков
+                                self.user_data[p_data['NICK']] = p_data
+                            print('HOST SENT:', reply[0][0])
+                        elif usr == 'CLIENT':  # клиент посылает инфу о себе, обновляем у себя
+                            self.user_data[reply[0][0]['NICK']] = reply[0][0]
+                            print('CLIENT SENT:', reply[0][0])
+                        else:
+                            raise Exception('UNEXPECTED USER')
+                        print('SERVER DATA:', self.user_data)
+                        # print("Sending: ", reply)
             except Exception as e:
                 print('\tSERVER//', e, data)
                 break
@@ -76,4 +82,5 @@ class Server:
 
 
 if __name__ == "__main__":
+    locker = threading.Lock()
     mp_server = Server(int(list(open('USER_IP.txt', 'r', encoding='utf-8'))[1].strip()), 2)
