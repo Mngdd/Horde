@@ -54,6 +54,7 @@ class Server:
                             self.user_data[p_data['NICK']] = p_data
                     elif usr == 'CLIENT':  # клиент посылает инфу о себе, обновляем у себя
                         self.user_data[reply[0][0]['NICK']] = reply[0][0]
+                        # print('CLIEND SENT:', reply[0][0])
                     else:
                         raise Exception('UNEXPECTED USER')
 

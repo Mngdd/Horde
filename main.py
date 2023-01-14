@@ -272,8 +272,8 @@ def game_loop():
     players = {}  # содержит класс игрока по никам
 
     # спаун
-    p = Player(430, 300, my_nickname, players_group)  # игрк
-    players[p.nick] = p
+    real_player = Player(430, 300, my_nickname, players_group)  # игрк
+    players[real_player.nick] = real_player
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
     for _ in range(6):
@@ -293,13 +293,13 @@ def game_loop():
                 reply = parse_data(send_data(net, 'HOST', to_send))  # отправляем на серв обработанную инфу
                 # print('HOST', reply)
             else:  # игрок - клиент(подключился на чужой сервер)
-                to_send = [p.get_data()]  # сюда вписывать то, что отправляем на сервер: себя и все что с ним связано
+                to_send = [real_player.get_data()]  # сюда вписывать то, что отправляем на сервер: себя и все что с ним связано
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
                 # print('USER', reply)
             try:  # обновляем инфу об игроках
 
                 for p_nick in reply[0]:
-                    if p_nick == p.nick:
+                    if p_nick == real_player.nick:
                         continue
                     x, y = reply[0][p_nick]['POS']
                     if p_nick not in players:
