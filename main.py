@@ -129,7 +129,6 @@ class Player(Pawn):  # игрок
 
         if server_player:
             self.pos = server_player
-            print('\t', self.pos)
         else:
             k = pygame.key.get_pressed()
             if k[pygame.K_w]:
@@ -298,15 +297,14 @@ def game_loop():
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
                 # print('USER', reply)
             try:  # обновляем инфу об игроках
-                print(reply[0])
 
-                for p_data in reply[0]:
-                    if p_data['NICK'] == p.nick:
+                for p_nick in reply[0]:
+                    if p_nick == p.nick:
                         continue
-                    x, y = reply[0][p_data['NICK']]['POS']
-                    if p_data['NICK'] not in players:
-                        players[p_data['NICK']] = Player(x, y, p_data['NICK'], players_group)  # другой игрк
-                    players[p_data['NICK']].move([x, y])
+                    x, y = reply[0][p_nick]['POS']
+                    if p_nick not in players:
+                        players[p_nick] = Player(x, y, p_nick, players_group)  # другой игрк
+                    players[p_nick].move([x, y])
 
             except Exception as e:
                 print('MAIN//', e, reply)
@@ -329,12 +327,14 @@ def game_loop():
 
 
 def send_data(net, *data):  # TODO: добавить ожидание перед отключение(чтоб не кикало за любой пустой ответ)
-    """
-    Send position to server
-    :return: None
-    """
+    global timeout
     reply = net.send(str(data))
-    if reply == '':
+    if reply == '':  # можна канеш сразу при пустом ответе помирать, но на всякий я так сделаю
+        timeout += 1
+    else:
+        timeout = 0
+
+    if timeout >= 10:
         raise Exception('ОТВЕТА НЕТ. ОТКЛЮЧЕН')
     return reply
 
@@ -384,9 +384,11 @@ def load_level(level_name):
 
 
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
+    timeout = 0  # количество пустых ответов от сервера
+
     mp_game = True  # это сетевая или мультиплеер
     im_a_host = False  # False # чиста для копипаста фолс
-    my_nickname = 'PLAYER 12'
+    my_nickname = 'PLAYER 2'
 
     if im_a_host:
         p = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер

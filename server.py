@@ -33,6 +33,7 @@ class Server:
     def threaded_client(self, conn):  # вот тут крч мы с челом работаем
         conn.send(str.encode(str(self.user_nickname)))  # зачем не знаю
         reply = 'NONE'  # отве
+        data = None
         while True:
             try:
                 data = conn.recv(4096)  # тк не знаем скока тонн информации нам пошлет юзер
@@ -52,8 +53,6 @@ class Server:
                         for p_data in reply[0]:  # обновляем игроков
                             self.user_data[p_data['NICK']] = p_data
                     elif usr == 'CLIENT':  # клиент посылает инфу о себе, обновляем у себя
-                        print(reply[0][0])
-                        print(reply[0][0]['NICK'])
                         self.user_data[reply[0][0]['NICK']] = reply[0][0]
                     else:
                         raise Exception('UNEXPECTED USER')
