@@ -1,15 +1,23 @@
 import socket
+import time
 
 
 # здесь тупа отправляем и получаем от серва
 class Network:
-
-    def __init__(self):
+    def __init__(self, ip_port):
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.host = list(open('USER_IP.txt', 'r', encoding='utf-8'))[0].strip()  # ipv4 хоста
-        self.port = int(list(open('USER_IP.txt', 'r', encoding='utf-8'))[1].strip())  # порт узнать у хоста
+        self.host = ip_port[0]  # ipv4 хоста
+        self.port = int(ip_port[1])  # порт узнать у хоста
         self.addr = (self.host, self.port)  # адрес хоста полный
-        self.id = self.connect()
+        for i in range(4):
+            if i == 3:
+                raise ConnectionRefusedError('CONNECTION REFUSED')
+            time.sleep(0.5)  # чтоб сервак успел создаться если я хост
+            try:
+                self.id = self.connect()
+                break
+            except ConnectionRefusedError:
+                print('CONNECTION REFUSED, ATTEMPT:', i)
 
     def connect(self):  # тут подключаемся к серву
         self.client.connect(self.addr)

@@ -265,7 +265,7 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 def game_loop():
     if mp_game:
-        net = Network()
+        net = Network(ip_port)
     exit_condition = False
     finish_game = False
 
@@ -360,15 +360,13 @@ def draw():
 
 
 def main():
-    action = StartMenu(screen).run()
-    if action == StartMenu.PLAY:
-        done = game_loop()
-        while not done:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    done = True
-                if event.type == pygame.K_SPACE:  # TODO: сделать выход из гейм лупа сюда!
-                    game_loop()
+    done = game_loop()
+    while not done:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                done = True
+            if event.type == pygame.K_SPACE:  # TODO: сделать выход из гейм лупа сюда!
+                game_loop()
 
 
 def load_level(level_name):
@@ -386,12 +384,14 @@ def load_level(level_name):
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
 
-    mp_game = True  # это сетевая или мультиплеер
-    im_a_host = False  # False # чиста для копипаста фолс
-    my_nickname = 'PLAYER 2'
+    mp_game, im_a_host, my_nickname, ip_port = StartMenu(screen).run()
+    print(mp_game, im_a_host, my_nickname, ip_port)
 
+    # mp_game = True  # это сетевая или мультиплеер
+    # im_a_host = True  # я хост или че
+    # my_nickname = 'PLAYER 1'
     if im_a_host:
-        p = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
+        SERVER = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
 
     tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
     players_group = pygame.sprite.Group()
