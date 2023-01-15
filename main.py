@@ -9,6 +9,7 @@ import random
 from perks import *
 from trinkets import *
 from subprocess import Popen
+from weapon import *
 
 # прикольно так накидал конечн
 
@@ -273,6 +274,7 @@ def game_loop():
 
     # спаун
     real_player = Player(430, 300, my_nickname, players_group)  # игрк
+    Gun(460, 330, weapons_group)
     players[real_player.nick] = real_player
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
@@ -353,7 +355,7 @@ def draw():
     tile_group.draw(screen)
 
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
-                   *items_group.sprites(), *walls_group.sprites()]
+                   *items_group.sprites(), *walls_group.sprites(), *weapons_group.sprites()]
     # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
     for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
         screen.blit(spr.image, spr.rect)
@@ -400,6 +402,7 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
     projectiles_group = pygame.sprite.Group()
+    weapons_group = pygame.sprite.Group()
 
     game_map = None  # просто чтоб было
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
