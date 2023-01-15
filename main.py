@@ -399,6 +399,7 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     deployable_group = pygame.sprite.Group()
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
+    projectiles_group = pygame.sprite.Group()
 
     game_map = None  # просто чтоб было
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
