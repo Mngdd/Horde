@@ -1,14 +1,13 @@
+import ast
 import os
 import sys
-from network import Network
-import pygame
-from pytmx import load_pygame
-from menu import StartMenu
-import ast
-import random
-from perks import *
-from trinkets import *
 from subprocess import Popen
+
+from pytmx import load_pygame
+
+from menu import StartMenu
+from network import Network
+from trinkets import *
 from weapon import *
 
 # прикольно так накидал конечн
@@ -48,7 +47,9 @@ class Pawn(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.height = 5  # чтоб за спрайт заходить можно было
 
-        self.pos = [x, y]  # левый верхний угол всегда
+        self.pos: list = [x, y]  # левый верхний угол всегда
+        self.prev_pos = self.pos
+
         self.health = 0
         self.alive = False
         self.movement_vector = [0, 0]
@@ -57,7 +58,10 @@ class Pawn(pygame.sprite.Sprite):
         self.available_weapons = []
         self.equipped_weapon = None
         self.inventory = []
-        self.prev_pos = self.pos
+
+        self.left_hand_slot = (0, 0)  # относительная позиция, считать от левого верхнего пикселя
+        self.right_hand_slot = (0, 0)
+        self.back_slot = (0, 0)
 
     def move(self):  # расчет передвижения
         self.pos[0] += self.movement_vector[0]
@@ -84,6 +88,11 @@ class Pawn(pygame.sprite.Sprite):
                     # то перемещаем в предыдущую позицию
                     self.pos = self.prev_pos  # это не сработает если в предыдущей позиции мы уже застряли
                     # если такое будет происходить, я попробую еще чета, но пока сойдет
+        if self in players_group and pygame.sprite.spritecollideany(self, weapons_group):
+            for wep in weapons_group:
+                if self.rect.colliderect(wep.rect):
+                    print('PICKUPP')
+                    wep.pick_up(self)
 
     def init_rect(self):
         self.rect = self.image.get_rect()
@@ -114,10 +123,13 @@ class Player(Pawn):  # игрок
         self.health = 100
         self.alive = True
         self.nick = nick
-        # TODO: нужно оружие
-        self.available_weapons = []
-        self.equipped_weapon = None
+        self.available_weapons = []  # все оружия, TODO: добавить кулаки или другое стартовое
+        self.equipped_weapon: int = 0  # это держим в руке, это индекс available_weapons. 0 <= i < len(av_weapons)
         self.inventory = []
+
+        self.left_hand_slot = (15, 15)  # относительная позиция, считать от левого верхнего пикселя
+        self.right_hand_slot = (60, 15)
+        self.back_slot = (30, 0)
 
         self.multipliers = {'STRENGTH_P': 1, 'STRENGTH_M': 1}  # p плюс, m умножить потом перепишу
         self.trinkets = all_trinkets
@@ -125,7 +137,7 @@ class Player(Pawn):  # игрок
         # с перками потом еще перепишу, а то чета отдельный список хранить в котором умножают отдельные
         # переменные, как-то неоч, тк есть еще и просто список перков(
 
-    def move(self, server_player=False):
+    def move(self, server_player: list = False):
         super(Player, self).move()
 
         if server_player:
@@ -146,6 +158,10 @@ class Player(Pawn):  # игрок
     def update(self, *args):
         self.prev_pos = self.pos
         self.move()
+        if self.available_weapons:  # TODO: ПЕРЕМЕЩАТЬ ВСЕ ОРУЖИЯ(ВСЕ СЛОТЫ ДВИГАТЬ)
+            self.available_weapons[self.equipped_weapon].pos = \
+                self.available_weapons[self.equipped_weapon].rect.topleft = \
+                tuple(map(sum, zip(self.left_hand_slot, self.pos)))
         super(Player, self).update()
 
     def new_perk_add(self, perk):
@@ -253,12 +269,6 @@ class Weapon(pygame.sprite.Sprite):
     def reload(self):
         pass
 
-
-class Projectile(pygame.sprite.Sprite):  # пуля сама
-    def __init__(self, *groups):
-        super().__init__(*groups)
-
-
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
     return ((point_a[0] - point_b[0]) ** 2 +
             (point_a[1] - point_b[1]) ** 2) ** 0.5
@@ -295,7 +305,8 @@ def game_loop():
                 reply = parse_data(send_data(net, 'HOST', to_send))  # отправляем на серв обработанную инфу
                 # print('HOST', reply)
             else:  # игрок - клиент(подключился на чужой сервер)
-                to_send = [real_player.get_data()]  # сюда вписывать то, что отправляем на сервер: себя и все что с ним связано
+                to_send = [
+                    real_player.get_data()]  # сюда вписывать то, что отправляем на сервер: себя и все что с ним связано
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
                 # print('USER', reply)
             try:  # обновляем инфу об игроках
@@ -316,11 +327,16 @@ def game_loop():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 exit_condition = True
+            if event.type == pygame.MOUSEBUTTONUP:
+                if real_player.available_weapons:
+                    real_player.available_weapons[real_player.equipped_weapon].shoot(real_player, pygame.mouse.get_pos())
 
         for p in players_group:
             p.update(screen)
         for e in enemies_group:
             e.update(screen)
+        for bullet in projectiles_group:
+            bullet.update()
 
         draw()  # рендерим тут
 
@@ -328,7 +344,7 @@ def game_loop():
         clock.tick(60)
 
 
-def send_data(net, *data):  # TODO: добавить ожидание перед отключение(чтоб не кикало за любой пустой ответ)
+def send_data(net, *data):
     global timeout
     reply = net.send(str(data))
     if reply == '':  # можна канеш сразу при пустом ответе помирать, но на всякий я так сделаю
@@ -343,7 +359,7 @@ def send_data(net, *data):  # TODO: добавить ожидание перед
 
 def parse_data(data):
     try:
-        d = ast.literal_eval(data)  # TODO: тут тоже доделать
+        d = ast.literal_eval(data)
         # print('server replied:', d)
         return d
     except Exception as e:
@@ -355,7 +371,8 @@ def draw():
     tile_group.draw(screen)
 
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
-                   *items_group.sprites(), *walls_group.sprites(), *weapons_group.sprites()]
+                   *items_group.sprites(), *walls_group.sprites(), *weapons_group.sprites(),
+                   *projectiles_group.sprites()]
     # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
     for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
         screen.blit(spr.image, spr.rect)
@@ -383,6 +400,16 @@ def load_level(level_name):
                 Wall(x * 32, y * 32, walls_group, [x * 32, y * 32, surf.get_width(), surf.get_height()], surf)
 
 
+# группы снаружи if тк иначе они не импортнутся
+projectiles_group = pygame.sprite.Group()
+tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
+players_group = pygame.sprite.Group()
+enemies_group = pygame.sprite.Group()
+deployable_group = pygame.sprite.Group()
+items_group = pygame.sprite.Group()
+walls_group = pygame.sprite.Group()
+weapons_group = pygame.sprite.Group()
+
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
 
@@ -394,15 +421,6 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     # my_nickname = 'PLAYER 1'
     if im_a_host:
         SERVER = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
-
-    tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
-    players_group = pygame.sprite.Group()
-    enemies_group = pygame.sprite.Group()
-    deployable_group = pygame.sprite.Group()
-    items_group = pygame.sprite.Group()
-    walls_group = pygame.sprite.Group()
-    projectiles_group = pygame.sprite.Group()
-    weapons_group = pygame.sprite.Group()
 
     game_map = None  # просто чтоб было
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
