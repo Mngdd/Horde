@@ -3,6 +3,7 @@ import os
 import sys
 from subprocess import Popen
 
+import random
 import pygame
 from pytmx import load_pygame
 
@@ -92,7 +93,6 @@ class Pawn(pygame.sprite.Sprite):
         if self in players_group and pygame.sprite.spritecollideany(self, weapons_group):
             for wep in weapons_group:
                 if self.rect.colliderect(wep.rect):
-                    print('PICKUPP')
                     wep.pick_up(self)
 
     def init_rect(self):
@@ -101,6 +101,9 @@ class Pawn(pygame.sprite.Sprite):
 
     def update(self, *args):
         self.rect.topleft = self.pos
+        if self.available_weapons:
+            wep, m_pos = self.available_weapons[self.equipped_weapon], pygame.mouse.get_pos()
+            wep.angle = 180 - math.degrees(math.atan2(m_pos[1] - wep.pos[1], m_pos[0] - wep.pos[0]))
 
     def fire(self):
         pass  # стрелят
@@ -128,9 +131,9 @@ class Player(Pawn):  # игрок
         self.equipped_weapon: int = 0  # это держим в руке, это индекс available_weapons. 0 <= i < len(av_weapons)
         self.inventory = []
 
-        self.left_hand_slot = (15, 15)  # относительная позиция, считать от левого верхнего пикселя
-        self.right_hand_slot = (60, 15)
-        self.back_slot = (30, 0)
+        self.left_hand_slot = (0, 5)  # относительная позиция, считать от левого верхнего пикселя
+        self.right_hand_slot = (10, 5)
+        self.back_slot = (5, 0)
 
         self.multipliers = {'STRENGTH_P': 1, 'STRENGTH_M': 1}  # p плюс, m умножить потом перепишу
         self.trinkets = all_trinkets
@@ -154,13 +157,16 @@ class Player(Pawn):  # игрок
                 self.movement_vector[0] += -1 * self.movement_speed
             if k[pygame.K_d]:
                 self.movement_vector[0] += 1 * self.movement_speed
+            if k[pygame.K_r]:
+                if self.available_weapons and not self.available_weapons[self.equipped_weapon].reloading:
+                    self.available_weapons[self.equipped_weapon].reload()
             if m[0]:  # лкм нажата
                 self.shoot(pygame.mouse.get_pos())
 
         self.collision_test()
 
     def shoot(self, mouse_pos):  # стреляем
-        if self.available_weapons:
+        if self.available_weapons and self.available_weapons[self.equipped_weapon].can_shoot:
             bul_data = self.available_weapons[self.equipped_weapon].shoot(self, mouse_pos)
             if bul_data:
                 Projectile(*bul_data, projectiles_group)
@@ -239,7 +245,7 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
 class Wall(pygame.sprite.Sprite):  # стены, от них наверн никого наследовать не надо
     image = pygame.transform.scale(load_image("templates/wall.jpg"), (32, 32))  # РАЗМЕР 1 ПЛИТКИ - 32х32
 
-    def __init__(self, x, y, groups, rect_data, image=None):  # rect_data потом разберусь с ним, пока юзлес
+    def __init__(self, x, y, groups, rect_data, image=None):  # TODO: в rect_data загружать инфу о коллизии(точки)
         super().__init__(groups)
         self.pos = [x, y]
         self.image = Wall.image if image is None else image
@@ -276,7 +282,6 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
 
     def move(self, time):  # размер экрана и время
         if pygame.time.get_ticks() > self.when_created + self.lifetime:
-            print('DIED')
             self.kill()  # пуля исчезает, если время ее жизни истекло
         self.pos[0] += self.movement_vector[0] * self.speed * time
         self.pos[1] += self.movement_vector[1] * self.speed * time
@@ -308,6 +313,7 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 
 def game_loop():
+    global real_player
     if mp_game:
         net = Network(ip_port)
     exit_condition = False
@@ -404,7 +410,32 @@ def draw():
                    *projectiles_group.sprites()]
     # ТУДА ВСЕ ГРУППЫ!!!(кроме tile_group)
     for spr in sorted(all_sprites, key=lambda x: x.pos[1]):  # сортируем по y и рендерим по убыванию
-        screen.blit(spr.image, spr.rect)
+        if spr in weapons_group:  # тут не только веапоны, а все что вращается, но пока что это веапоны только
+            if 270 >= spr.angle >= 90:
+                rotated_image = pygame.transform.rotate(spr.image, -spr.angle)
+                rotated_image = pygame.transform.flip(rotated_image, False, True)
+            else:
+                rotated_image = pygame.transform.rotate(spr.image, spr.angle)
+            new_rect = rotated_image.get_rect(center=spr.image.get_rect(topleft=spr.rect.topleft).center)
+
+            screen.blit(rotated_image, new_rect.topleft)
+        else:
+            screen.blit(spr.image, spr.rect)
+
+    # рисуем HUD
+    curr = real_player.available_weapons[real_player.equipped_weapon].curr_mag_ammo \
+        if real_player.available_weapons else 0
+    total = real_player.available_weapons[real_player.equipped_weapon].all_ammo_current \
+        if real_player.available_weapons else 0
+    wep_name = real_player.available_weapons[real_player.equipped_weapon].name \
+        if real_player.available_weapons else 'Nothing'
+    screen.blit(font.render(f'HP: {real_player.health}', True, (15, 15, 15)), get_screen_cords(5, 90))
+    screen.blit(font.render(f'{curr}/{total}', True, (15, 15, 15)), get_screen_cords(90, 90))
+    screen.blit(font.render(f'{wep_name}', True, (15, 15, 15)), get_screen_cords(75, 90))
+
+
+def get_screen_cords(x, y):  # проценты от экрана
+    return screen.get_width() // 100 * x, screen.get_height() // 100 * y
 
 
 def main():
@@ -438,6 +469,7 @@ deployable_group = pygame.sprite.Group()
 items_group = pygame.sprite.Group()
 walls_group = pygame.sprite.Group()
 weapons_group = pygame.sprite.Group()
+font = pygame.font.SysFont('Cascadia Code', 30)
 
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
