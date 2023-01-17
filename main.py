@@ -3,6 +3,7 @@ import os
 import sys
 from subprocess import Popen
 
+import pygame
 from pytmx import load_pygame
 
 from menu import StartMenu
@@ -144,6 +145,7 @@ class Player(Pawn):  # игрок
             self.pos = server_player
         else:
             k = pygame.key.get_pressed()
+            m = pygame.mouse.get_pressed()
             if k[pygame.K_w]:
                 self.movement_vector[1] += -1 * self.movement_speed
             if k[pygame.K_s]:
@@ -152,8 +154,16 @@ class Player(Pawn):  # игрок
                 self.movement_vector[0] += -1 * self.movement_speed
             if k[pygame.K_d]:
                 self.movement_vector[0] += 1 * self.movement_speed
+            if m[0]:  # лкм нажата
+                self.shoot(pygame.mouse.get_pos())
 
         self.collision_test()
+
+    def shoot(self, mouse_pos):  # стреляем
+        if self.available_weapons:
+            bul_data = self.available_weapons[self.equipped_weapon].shoot(self, mouse_pos)
+            if bul_data:
+                Projectile(*bul_data, projectiles_group)
 
     def update(self, *args):
         self.prev_pos = self.pos
@@ -250,24 +260,47 @@ class Tile(pygame.sprite.Sprite):  # просто плитки, никакой �
         self.rect.topleft = self.pos
 
 
-class Weapon(pygame.sprite.Sprite):
-    def __init__(self, *groups):
+class Projectile(pygame.sprite.Sprite):  # пуля сама
+    bullet_image_default = pygame.transform.scale(load_image("weapons/bullet1.png"), (8, 8))
+
+    def __init__(self, source, target, speed, lifetime, *groups):
+        # откуда, куда, скорость, сколько длится жизнь пули, цвет
         super().__init__(*groups)
-        self.curr_mag_ammo = 0  # сколько патрон ща в магазе
-        self.mag_capacity = 0  # сколько влазит в магаз
-        self.ammo_max = 0  # сколько можно хранить патрон для этого оружия(без учета магаза)
-        # (мб переделать типа патроны не индивидуально хранятся, а в инвентаре)
-        self.all_ammo_current = 0  # скока ща всего патрон (без учета магаза)
-        self.firerate = 0.0  # темп
-        self.spread = 0.0  # разброс
-        self.name = 'NONE'
-        self.rarity = None  # типа редкое\легендарное\эпичное и тп
+        self.image = Projectile.bullet_image_default
+        self.rect = self.image.get_rect()
+        self.pos = [source[0], source[1]]
+        self.movement_vector = [target[0], target[1]]
+        self.speed = speed
+        self.lifetime = lifetime
+        self.when_created = pygame.time.get_ticks()
 
-    def shoot(self):
-        pass
+    def move(self, time):  # размер экрана и время
+        if pygame.time.get_ticks() > self.when_created + self.lifetime:
+            print('DIED')
+            self.kill()  # пуля исчезает, если время ее жизни истекло
+        self.pos[0] += self.movement_vector[0] * self.speed * time
+        self.pos[1] += self.movement_vector[1] * self.speed * time
+        self.rect.topleft = self.pos
 
-    def reload(self):
-        pass
+    def update(self):
+        self.move(2)
+
+    def render(self, surface):
+        surface.blit(self.image, self.pos)
+
+    def meet(self, bullet, obj) -> str:
+        if pygame.sprite.spritecollide(bullet, obj, False, pygame.sprite.collide_rect):
+            return obj.__name__
+
+    def hit(self, bullet, enemy):
+        if self.meet(bullet, enemy) == 'Enemy':
+            # self.health -= 1 # типо нужно вычитать какое-то колво хп у противника
+            ...
+
+    def freeze(self, bullet, enemy):
+        if self.meet(bullet, enemy) == 'Enemy':
+            ...  # надо замедлять противника
+
 
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
     return ((point_a[0] - point_b[0]) ** 2 +
@@ -327,9 +360,6 @@ def game_loop():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 exit_condition = True
-            if event.type == pygame.MOUSEBUTTONUP:
-                if real_player.available_weapons:
-                    real_player.available_weapons[real_player.equipped_weapon].shoot(real_player, pygame.mouse.get_pos())
 
         for p in players_group:
             p.update(screen)
@@ -337,7 +367,6 @@ def game_loop():
             e.update(screen)
         for bullet in projectiles_group:
             bullet.update()
-
         draw()  # рендерим тут
 
         pygame.display.flip()

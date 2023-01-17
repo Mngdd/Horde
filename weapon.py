@@ -4,60 +4,7 @@ from threading import Timer
 
 import pygame
 
-from main import load_image, projectiles_group, screen
-
-
-class Projectile(pygame.sprite.Sprite):  # пуля сама
-
-    def __init__(self, source, target, speed, lifetime, color, *groups):
-        # откуда, куда, скорость, сколько длится жизнь пули, цвет
-        super().__init__(*groups)
-        self.image = pygame.Surface([4, 4])  # TODO: ПЕРЕПИСАТЬ НА ПНГ КАК У ОРУЖИЯ КРЧ
-        self.image.set_colorkey(pygame.Color('black'))
-        self.rect = self.image.get_rect(x=source[0], y=source[1])
-        pygame.draw.circle(screen, color,
-                           (self.rect.width // 2, self.rect.height // 2),
-                           self.rect.width // 2)
-        self.pos = [source[0], source[1]]
-        self.movement_vector = [target[0], target[1]]
-        self.speed = speed
-        self.lifetime = lifetime
-        self.when_created = pygame.time.get_ticks()
-        print('BULLET AT ', self.pos)
-
-    def move(self, time):  # размер экрана и время
-        if pygame.time.get_ticks() > self.when_created + self.lifetime:
-            self.kill()  # пуля исчезает, если время ее жизни истекло
-        self.pos[0] += self.movement_vector[0] * self.speed * time
-        self.pos[1] += self.movement_vector[1] * self.speed * time
-        self.rect.topleft = self.pos
-        # я не уверена, по идее это должно давать нам следующую координату
-        # TODO: переделать под макс длину жизни пули
-        # TODO: или макс длину, за экран ваще по барабану
-        if self.pos[0] > screen or self.pos[0] < 0 or \
-                self.pos[1] > screen or self.pos[1] < 0:
-            self.kill()  # если пуля вышла за пределы экрана - исчезает
-
-    def update(self):
-        print('UPDATIN BULLET')
-        self.move(2)
-
-    def render(self, surface):
-        surface.blit(self.image, self.pos)
-
-    def meet(self, bullet, obj) -> str:
-        if pygame.sprite.spritecollide(bullet, obj, False, pygame.sprite.collide_rect):
-            return obj.__name__
-
-    def hit(self, bullet, enemy):
-        if self.meet(bullet, enemy) == 'Enemy':
-            # self.health -= 1 # типо нужно вычитать какое-то колво хп у противника
-            ...
-
-    def freeze(self, bullet, enemy):
-        if self.meet(bullet, enemy) == 'Enemy':
-            ...  # надо замедлять противника
-
+from main import load_image
 
 class Weapon(pygame.sprite.Sprite):
     """
@@ -159,9 +106,9 @@ class Gun(Weapon):
 
             # спавним пулю и передаем ей юзера, направление, скорость, длительность полета, цвет?(поменять на пнг)
             # и спрайт-группу
-            Projectile(user.pos, super().normalize_vector(angled_direction), 15, 1000, (255, 0, 0), projectiles_group)
+            return user.pos, super().normalize_vector(angled_direction), 5, 1000
         if self.curr_mag_ammo == 0:
-            print('NO AMMO')  # типа self.no_ammo_sound играть и мб как-то игроку показывать "NO AMMO"
+            return print('NO AMMO')  # типа self.no_ammo_sound играть и мб как-то игроку показывать "NO AMMO"
 
 
 class Melee(Weapon):
