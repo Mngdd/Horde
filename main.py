@@ -3,7 +3,7 @@ import sys
 from network import Network
 import pygame
 from pytmx import load_pygame
-from menu import StartMenu
+from menu import StartMenu, EndMenu
 import ast
 import random
 from perks import *
@@ -332,7 +332,7 @@ def game_loop():
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
 
-    waves = [2, 5, 10]  # кол-ва противников в волнах
+    waves = [2] #[2, 5, 10]  # кол-ва противников в волнах
     wave_index = 0
     wave_ongoing = False  # идет ли волна. если False, то перерыв
     enemies_to_spawn = 0  # сколько врагов еще заспавнить (из всех спавнпоинтов за 1 раз)
@@ -386,7 +386,7 @@ def game_loop():
             pygame.time.set_timer(wave_start_event, 5000, 1)
             wave_index += 1
             if wave_index >= len(waves):
-                exit_condition = True
+                finish_game = True
             wave_ongoing = False
 
         for p in players_group:
@@ -398,6 +398,7 @@ def game_loop():
 
         pygame.display.flip()
         clock.tick(60)
+    EndMenu(screen, real_player.money).run()
 
 
 def send_data(net, *data):  # TODO: добавить ожидание перед отключение(чтоб не кикало за любой пустой ответ)

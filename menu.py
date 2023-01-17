@@ -50,6 +50,7 @@ class Menu:
     def quit(self):
         self.destroy()
         self.result = self.QUIT
+        pygame.quit()
 
     def destroy(self):
         self.running = False
@@ -76,6 +77,19 @@ class StartMenu(Menu):
     def settings(self):
         self.destroy()
         self.result = SettingsMenu(self.screen).run()
+
+
+class EndMenu(Menu):
+    def __init__(self, screen: pygame.surface.Surface, money: int):
+        # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
+        #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
+        # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
+        #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
+        quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
+                             onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
+        label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+                      font=pygame.font.SysFont('Cascadia Code', 50))
+        super(EndMenu, self).__init__(quit_button, label)
 
 
 class SettingsMenu(Menu):
