@@ -11,6 +11,8 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
     AUTO = 'AUTO'
     SINGLE = 'SINGLE'
     BURST = 'BURST'  # типы стрельбы
+    SHOTGUN = 'SHOTGUN'
+    DRAW_SIZE = (86, 44)
 
     def __init__(self, x, y, *groups):
         super().__init__(*groups)
@@ -31,7 +33,7 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
         self.frames = []
         self.cur_frame = 5  # номер кадра с картинкой оружия
         self.cut_sheet(load_image("weapons/weapons1.png"), 10, 20)
-        self.image = pygame.transform.scale(self.frames[self.cur_frame], (98, 44))
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.angle: int = 0  # угол поворота
 
         self.rect = self.image.get_rect()
@@ -112,8 +114,8 @@ class Gun(Weapon):
         self.can_shoot: bool = True  # если нет патрон/перезарядка/кулдаун, то фолс
         self.burst_can_shoot: bool = True
 
-        self.cur_frame = 5  # номер кадра с картинкой оружия
-        self.image = pygame.transform.scale(self.frames[self.cur_frame], (98, 44))
+        self.cur_frame = 6  # номер кадра с картинкой оружия
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.no_ammo_sound: str = ''  # звук отсутствия патрон
 
     def burst_cooldown_finish(self):
@@ -143,7 +145,7 @@ class Gun(Weapon):
             self.can_shoot = False
             self.timer(self.cooldown, self.cooldown_finish)
             print('SHOOT', self.curr_mag_ammo, self.all_ammo_current)
-            return user.pos, super().normalize_vector(angled_direction), 5, 1000
+            return user.pos[:], super().normalize_vector(angled_direction), 5, 1000
         if self.curr_mag_ammo == 0:
             return print('NO AMMO')  # типа self.no_ammo_sound играть и мб как-то игроку показывать "NO AMMO"
 
@@ -181,7 +183,7 @@ class MachineGun(Gun):
         self.can_shoot: bool = True
 
         self.cur_frame = 6
-        self.image = pygame.transform.scale(self.frames[self.cur_frame], (98, 44))
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.no_ammo_sound: str = ''
 
 
@@ -202,7 +204,7 @@ class PistolLikeGun(Gun):
         self.can_shoot: bool = True
 
         self.cur_frame = 6
-        self.image = pygame.transform.scale(self.frames[self.cur_frame], (98, 44))
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.no_ammo_sound: str = ''
 
 
@@ -227,7 +229,7 @@ class BurstGun(Gun):
         self.burst_can_shoot: bool = True
 
         self.cur_frame = 6
-        self.image = pygame.transform.scale(self.frames[self.cur_frame], (98, 44))
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.no_ammo_sound: str = ''
 
 
