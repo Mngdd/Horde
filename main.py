@@ -95,10 +95,6 @@ class Pawn(pygame.sprite.Sprite):
                     # то перемещаем в предыдущую позицию
                     self.pos = self.prev_pos  # это не сработает если в предыдущей позиции мы уже застряли
                     # если такое будет происходить, я попробую еще чета, но пока сойдет
-        if self in players_group and pygame.sprite.spritecollideany(self, weapons_group):
-            for wep in weapons_group:
-                if self.rect.colliderect(wep.rect):
-                    wep.pick_up(self)
 
     def init_rect(self):
         self.rect = self.image.get_rect()
@@ -132,6 +128,7 @@ class Player(Pawn):  # игрок
         self.alive = True
         self.curr_state = 'IDLE'
         self.nick = nick
+        self.action_text = ''  # по центру текст тип перезарядка или еще чет
         self.available_weapons = []  # все оружия, TODO: добавить кулаки или другое стартовое
         self.equipped_weapon: int = 0  # это держим в руке, это индекс available_weapons. 0 <= i < len(av_weapons)
         self.inventory = []
@@ -187,9 +184,19 @@ class Player(Pawn):  # игрок
             if k[pygame.K_r]:
                 if self.available_weapons and not self.available_weapons[self.equipped_weapon].reloading:
                     self.available_weapons[self.equipped_weapon].reload()
+
             if m[0]:  # лкм нажата
                 self.shoot(pygame.mouse.get_pos())
 
+        if pygame.sprite.spritecollideany(self, weapons_group):
+            for wep in weapons_group:
+                if self.rect.colliderect(wep.rect):
+                    if k[pygame.K_a]:
+                        wep.pick_up(self)
+                    else:
+                        self.action_text = f'PICK UP {wep.name}'
+
+        self.action_text = f'RELOADING...'
         self.collision_test()
 
     def move_frame(self):
@@ -205,6 +212,7 @@ class Player(Pawn):  # игрок
                 Projectile(*bul_data, projectiles_group)
 
     def update(self, *args):
+        self.action_text = ''
         if time.time() - self.timing > 0.35:
             self.move_frame()
         self.image = pygame.transform.scale(self.states[self.curr_state][self.cur_frame + self.look_at * 4], (72, 72))
@@ -472,6 +480,7 @@ def draw():
     screen.blit(font.render(f'HP: {real_player.health}', True, (15, 15, 15)), get_screen_cords(5, 90))
     screen.blit(font.render(f'{curr}/{total}', True, (15, 15, 15)), get_screen_cords(90, 90))
     screen.blit(font.render(f'{wep_name}', True, (15, 15, 15)), get_screen_cords(75, 90))
+    screen.blit(font.render(f'{real_player.action_text}', True, (15, 15, 15)), get_screen_cords(35, 90))
 
 
 def get_screen_cords(x, y):  # проценты от экрана
