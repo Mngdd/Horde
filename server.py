@@ -23,10 +23,12 @@ class Server:
         print("\tWaiting for a connection")
         self.user_nickname = None
         self.user_data = {}  # {'test': {'online': False, 'ip': -1, 'vars': [None]}}
-        self.enemy_data = None  # тупа спрайт группа капец я умный да
+        self.enemy_data = {}  # тупа спрайт группа капец я умный да
+        self.bullets
         self.main()
 
-    def is_port_in_use(self, port):
+    @staticmethod
+    def is_port_in_use(port):
         import socket
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if s.connect_ex(('localhost', port)) == 0:
