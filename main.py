@@ -280,7 +280,7 @@ class Player(Pawn):  # игрок
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
     def __init__(self, x: int, y: int, *groups):
         super().__init__(x, y, *groups)
-        self.movement_speed = random.uniform(1.0, 3.0)
+        self.movement_speed = round(random.uniform(1.0, 3.0), 1)
         self.health = 100
         self.damage_amount = (5, 15)
         self.alive = True
@@ -313,7 +313,7 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
         super(Enemy, self).update()
 
     def get_data(self):
-        return self.pos, self.health, self.movement_speed
+        return {'TYPE': 'E', 'POS': self.pos, 'HP': self.health, 'SPEED': self.movement_speed}
 
 
 class Deployable(Pawn):  # гаджетиы - турели/мины и всякое такое что пассивно наносит урон врагам
@@ -366,7 +366,8 @@ class Tile(pygame.sprite.Sprite):  # просто плитки, никакой �
 class Projectile(pygame.sprite.Sprite):  # пуля сама
     bullet_image_default = pygame.transform.scale(load_image("weapons/bullet1.png"), (8, 8))
 
-    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups):
+    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups, bid=None):
+        global b_id_counter
         # откуда, куда, скорость, сколько длится жизнь пули, цвет
         super().__init__(*groups)
         self.image = Projectile.bullet_image_default
@@ -378,6 +379,12 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
         self.when_created = pygame.time.get_ticks()
         self.damage = damage
         self.enemy_team = enemy_team
+        if bid is None:
+            self.id = b_id_counter  # мега костыль чтобы избежать повтора пуль
+            b_ids.append(self.id)
+            b_id_counter += 1
+        else:
+            self.id = bid
 
     def move(self, time):  # размер экрана и время
         if pygame.time.get_ticks() > self.when_created + self.lifetime:
@@ -410,7 +417,8 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
             ...  # надо замедлять противника
 
     def get_data(self):
-        return self.pos, self.damage, self.movement_vector
+        return {'TYPE': 'B', 'POS': self.pos, 'DMG': self.damage, 'TARG': self.movement_vector,
+                'TIME':self.lifetime, 'ID': self.id}
 
 
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
@@ -465,12 +473,18 @@ def game_loop():
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
             try:  # обновляем инфу об игроках
                 for p_nick in reply[0]:
+                    # print('\t', reply)
                     if p_nick == real_player.nick:
                         continue
                     x, y = reply[0][p_nick]['POS']
                     if p_nick not in players:
                         players[p_nick] = Player(x, y, p_nick, players_group)  # другой игрк
                     players[p_nick].move([x, y])
+                for bul_data in reply[2]:
+                    print('\t', bul_data)
+                    if bul_data['ID'] not in b_ids:
+                        Projectile(bul_data['POS'], bul_data['TARG'], 5, bul_data['TIME'], bul_data['DMG'], enemies_group,
+                                   projectiles_group, bid=bul_data['ID'])
 
             except Exception as e:
                 print('MAIN//', e, reply)
@@ -500,6 +514,7 @@ def game_loop():
 def send_data(net, *data):
     global timeout
     reply = net.send(str(data))
+    # print('server replied:', reply)
     if reply == '':  # можна канеш сразу при пустом ответе помирать, но на всякий я так сделаю
         timeout += 1
     else:
@@ -513,11 +528,10 @@ def send_data(net, *data):
 def parse_data(data):
     try:
         d = ast.literal_eval(data)
-        # print('server replied:', d)
         return d
     except Exception as e:
         print('PARSE//', e)
-        return None
+        exit(-1)  # TODO: убрать потом
 
 
 def draw():
@@ -592,6 +606,8 @@ walls_group = pygame.sprite.Group()
 weapons_group = pygame.sprite.Group()
 font = pygame.font.SysFont('Cascadia Code', 30)
 
+b_ids = []
+b_id_counter = 0
 camera_pos = pygame.math.Vector2(100, 100)
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
