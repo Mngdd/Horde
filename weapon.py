@@ -1,7 +1,7 @@
 import math
 import random
 from threading import Timer
-
+import time
 import pygame
 
 from main import load_image
@@ -13,9 +13,14 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
     BURST = 'BURST'  # типы стрельбы
     SHOTGUN = 'SHOTGUN'
     DRAW_SIZE = (86, 44)
+    SHOOT = 'SHOOT'
+    RELOAD = 'RELOAD'
+    RELOAD_FINISHED = 'RELOAD_FINISHED'
+    NO_AMMO = 'NO_AMMO'
 
     def __init__(self, x, y, *groups):
         super().__init__(*groups)
+        self.damage_range = (1, 2)  # min и max урон
         self.curr_mag_ammo: int = 0  # сколько патрон ща в магазе
         self.mag_capacity: int = 0  # сколько влазит в магаз
         self.ammo_max: int = 0  # сколько можно хранить патрон для этого оружия(без учета магаза)
@@ -23,8 +28,8 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
         self.all_ammo_current: int = 0  # скока ща всего патрон (без учета магаза)
         self.spread: float = 0.0  # разброс
         self.reload_time: float = 0.0  # время перезарядлки оружия
-        self.attack_sound: str = ''  # путь до звука
         self.name: str = 'NONE'
+        self.sounds: dict = {}
         self.rarity = None  # типа редкое\легендарное\эпичное и тп TODO: ДОБАВИТЬ РЕДКОСТЬ
         self.shoot_type = Weapon.SINGLE
         self.cooldown: float = 0.0  # темп собсна В СЕКУНДАХ(через time делать потомучт буду)
@@ -35,6 +40,7 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
         self.cut_sheet(load_image("weapons/weapons1.png"), 10, 20)
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.angle: int = 0  # угол поворота
+        self.noammotiming = time.time()  # чтоб не спамить
 
         self.rect = self.image.get_rect()
         self.rect.topleft = (x, y)
@@ -66,7 +72,7 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
                          vector[0] * math.sin(angle) + vector[1] * math.cos(angle))
         return result_vector
 
-    def shoot(self, user, mouse_pos):
+    def shoot(self, user, mouse_pos, looking_at):
         """
         выстрел оружия
         """
@@ -88,6 +94,17 @@ class Weapon(pygame.sprite.Sprite):  # каркас мили и дальнего
     def rot_center(self, angle):
         self.image = pygame.transform.rotate(self.image, angle)
 
+    def init_sounds(self):
+        self.sounds = {Weapon.SHOOT: self.load_sound('hl2_shotgun.mp3', 0.5),
+                       Weapon.RELOAD: self.load_sound('hl2_shotgun_reload.mp3', 0.5),
+                       Weapon.RELOAD_FINISHED: self.load_sound('hl2_shotgun_reload_finished.mp3', 0.5),
+                       Weapon.NO_AMMO: self.load_sound('no_ammo.mp3', 0.5)}
+
+    def load_sound(self, name: str, vol: float=1):
+        tmp = pygame.mixer.Sound("data/weapons/" + name)
+        tmp.set_volume(vol)
+        return tmp
+
 
 class Gun(Weapon):
     """
@@ -96,6 +113,7 @@ class Gun(Weapon):
 
     def __init__(self, x, y, *groups):
         super().__init__(x, y, *groups)
+        self.ammo_lifetime: int = 10
         self.curr_mag_ammo: int = 15  # сколько патрон ща в магазе
         self.mag_capacity: int = 15  # сколько влазит в магаз
         self.ammo_max: int = 100  # сколько можно хранить патрон для этого оружия(без учета магаза)
@@ -103,8 +121,8 @@ class Gun(Weapon):
         self.all_ammo_current: int = 32  # скока ща всего патрон (без учета магаза)
         self.spread: float = 6.8  # разброс
         self.reload_time = 3.0
-        self.attack_sound: str = ''  # путь до звука
         self.name: str = 'DEV GUN'
+        self.bullets_per_shot: int = 6  # кол-во дробинок при выстреле из дробаша
         self.rarity = None  # типа редкое\легендарное\эпичное и тп TODO: ДОБАВИТЬ РЕДКОСТЬ
         self.shoot_type = Weapon.BURST
         self.burst_count_max = 4  # скок патров за берст улетает
@@ -116,13 +134,14 @@ class Gun(Weapon):
 
         self.cur_frame = 6  # номер кадра с картинкой оружия
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
-        self.no_ammo_sound: str = ''  # звук отсутствия патрон
+
+        self.init_sounds()  # ИНИЦИАЛИЗАЦИЯ ЗВУКОВ ОРУЖИЯ, БЕЗ ЭТОЙ СТРОКИ БУДЕТ ВЫЛЕТ
 
     def burst_cooldown_finish(self):
         self.burst_curr = self.burst_count_max
         self.burst_can_shoot = True
 
-    def shoot(self, user, mouse_pos):
+    def shoot(self, user, mouse_pos, cam_pos):
         # current_time = pygame.time.get_ticks()  # а оно надо?
         if self.can_shoot and self.burst_can_shoot and self.curr_mag_ammo > 0:
             if self.shoot_type == Weapon.BURST:
@@ -135,33 +154,53 @@ class Gun(Weapon):
                 self.burst_can_shoot = False
                 self.timer(self.burst_timer, self.burst_cooldown_finish)
             self.curr_mag_ammo -= 1  # минус патрон
+            self.sounds[Weapon.SHOOT].play()
             direction = (mouse_pos[0] - user.pos[0], mouse_pos[1] - user.pos[1]) \
                 if mouse_pos != user.pos else (1, 1)  # куда стреляем
-            angle = math.radians(random.random() * self.spread - self.spread / 2)  # разброс случайны
-            angled_direction = self.rotate_vector(direction, angle)  # траектория пули с учетом разброса
+            direction += cam_pos
+            if self.shoot_type == Weapon.SHOTGUN:
+                bullets = []
+                self.can_shoot = False
+                self.timer(self.cooldown, self.cooldown_finish)
+                for b in range(1, self.bullets_per_shot + 1):
+                    angle = math.radians(1 / self.bullets_per_shot * b * self.spread * random.random() -
+                                         self.spread / 2 * random.choice([-1, 1]))  # разброс случайны
+                    angled_direction = self.rotate_vector(direction, angle)  # траектория пули с учетом разброса
+                    bullets.append((list(user.rect.center)[:], super().normalize_vector(angled_direction), 5, self.ammo_lifetime,
+                                    random.randrange(*self.damage_range)))
+                return bullets
+            else:
+                angle = math.radians(random.random() * self.spread -
+                                     self.spread / 2 * random.choice([-1, 1]))  # разброс случайны
+                angled_direction = self.rotate_vector(direction, angle)  # траектория пули с учетом разброса
 
-            # спавним пулю и передаем ей юзера, направление, скорость, длительность полета, цвет?(поменять на пнг)
-            # и спрайт-группу
-            self.can_shoot = False
-            self.timer(self.cooldown, self.cooldown_finish)
-            print('SHOOT', self.curr_mag_ammo, self.all_ammo_current)
-            return user.pos[:], super().normalize_vector(angled_direction), 5, 1000
+                # спавним пулю и передаем ей юзера, направление, скорость, длительность полета
+                # и спрайт-группу
+                self.can_shoot = False
+                self.timer(self.cooldown, self.cooldown_finish)
+                print('SHOOT', self.curr_mag_ammo, self.all_ammo_current)
+                return list(user.rect.center)[:], super().normalize_vector(angled_direction), 5, self.ammo_lifetime, \
+                       random.randrange(*self.damage_range)
         if self.curr_mag_ammo == 0:
-            return print('NO AMMO')  # типа self.no_ammo_sound играть и мб как-то игроку показывать "NO AMMO"
+            if time.time() - self.noammotiming > 0.5:
+                self.noammotiming = time.time()
+                self.sounds[Weapon.NO_AMMO].play()
+            return print('NO AMMO')
 
     def reload(self):
         if self.curr_mag_ammo == self.mag_capacity:
             return
         if self.reloading is False and self.all_ammo_current > 0:
-            print('RELOADIN')
+            self.sounds[Weapon.RELOAD].play()
             self.reloading = True
             self.can_shoot = False
             self.timer(self.reload_time, self.reload)
         else:
+            self.sounds[Weapon.RELOAD].stop()
+            self.sounds[Weapon.RELOAD_FINISHED].play()
             tmp = (self.mag_capacity - self.curr_mag_ammo) % self.all_ammo_current
             self.curr_mag_ammo += tmp
             self.all_ammo_current -= tmp
-            print('RELOADIN FINISHED', self.curr_mag_ammo, self.all_ammo_current)
             self.reloading = False
             self.can_shoot = True
 
@@ -175,8 +214,7 @@ class MachineGun(Gun):
         self.all_ammo_current: int = 32
         self.spread: float = 6.8
         self.reload_time = 3.0
-        self.attack_sound: str = ''
-        self.name: str = 'machine gun 1'
+        self.name: str = 'machine gun class'
         self.rarity = None
         self.shoot_type = Weapon.AUTO
         self.cooldown: float = 0.2
@@ -184,7 +222,14 @@ class MachineGun(Gun):
 
         self.cur_frame = 6
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
-        self.no_ammo_sound: str = ''
+
+        self.init_sounds()
+
+    def init_sounds(self):
+        self.sounds = {Weapon.SHOOT: self.load_sound('rifle_shoot.mp3', 0.2),
+                       Weapon.RELOAD: self.load_sound('ak_reload.mp3', 0.5),
+                       Weapon.RELOAD_FINISHED: self.load_sound('ak_reload_finished.mp3', 0.5),
+                       Weapon.NO_AMMO: self.load_sound('no_ammo.mp3', 0.5)}
 
 
 class PistolLikeGun(Gun):
@@ -196,8 +241,7 @@ class PistolLikeGun(Gun):
         self.all_ammo_current: int = 32
         self.spread: float = 6.8
         self.reload_time = 3.0
-        self.attack_sound: str = ''
-        self.name: str = 'machine gun 1'
+        self.name: str = 'pistol class'
         self.rarity = None
         self.shoot_type = Weapon.SINGLE
         self.cooldown: float = 0.2
@@ -205,7 +249,14 @@ class PistolLikeGun(Gun):
 
         self.cur_frame = 6
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
-        self.no_ammo_sound: str = ''
+
+        self.init_sounds()
+
+    def init_sounds(self):
+        self.sounds = {Weapon.SHOOT: self.load_sound('hl2_usp.mp3', 0.3),
+                       Weapon.RELOAD: self.load_sound('usp_reload.mp3'),
+                       Weapon.RELOAD_FINISHED: self.load_sound('usp_reload_finished.mp3'),
+                       Weapon.NO_AMMO: self.load_sound('no_ammo.mp3', 0.5)}
 
 
 class BurstGun(Gun):
@@ -217,8 +268,7 @@ class BurstGun(Gun):
         self.all_ammo_current: int = 32
         self.spread: float = 6.8
         self.reload_time = 3.0
-        self.attack_sound: str = ''
-        self.name: str = 'machine gun 1'
+        self.name: str = 'burst gun class'
         self.rarity = None
         self.shoot_type = Weapon.BURST
         self.burst_count_max = 4
@@ -230,51 +280,192 @@ class BurstGun(Gun):
 
         self.cur_frame = 6
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
-        self.no_ammo_sound: str = ''
+
+        self.init_sounds()
+
+    def init_sounds(self):
+        self.sounds = {Weapon.SHOOT: self.load_sound('rifle_shoot.mp3', 0.2),
+                       Weapon.RELOAD: self.load_sound('ak_reload.mp3'),
+                       Weapon.RELOAD_FINISHED: self.load_sound('ak_reload_finished.mp3'),
+                       Weapon.NO_AMMO: self.load_sound('no_ammo.mp3', 0.5)}
+
+
+class Shotgun(Gun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.curr_mag_ammo: int = 2
+        self.mag_capacity: int = 15
+        self.ammo_max: int = 100
+        self.all_ammo_current: int = 32
+        self.spread: float = 16.8
+        self.reload_time = 3.0
+        self.name: str = 'shotgun class'
+        self.rarity = None
+        self.shoot_type = Weapon.SHOTGUN
+        self.burst_count_max = 4
+        self.burst_curr = 4
+        self.burst_timer: float = 0.3
+        self.cooldown: float = 0.4
+        self.can_shoot: bool = True
+        self.burst_can_shoot: bool = True
+
+        self.cur_frame = 6
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+
+        self.init_sounds()
+
+    def init_sounds(self):
+        self.sounds = {Weapon.SHOOT: self.load_sound('hl2_shotgun.mp3', 0.4),
+                       Weapon.RELOAD: self.load_sound('hl2_shotgun_reload.mp3', 0.5),
+                       Weapon.RELOAD_FINISHED: self.load_sound('hl2_shotgun_reload_finished.mp3', 0.5),
+                       Weapon.NO_AMMO: self.load_sound('no_ammo.mp3', 0.5)}
 
 
 class Melee(Weapon):
-    """
-    каркас оружия ближнего боя
-    """
-
     def __init__(self, *groups):
         super().__init__(*groups)
-        ...
+        self.init_sounds()
 
-# class SpreadGun(Weapon):
-#     """
-#     как шелли стреляет
-#     """
-#
-#     def __init__(self):
-#         super().__init__()
-#         self.weapon_cooldown = 750
-#         self.spread = 75
-#         self.count_bullets = 7  # сколько пуль в разбросе
-#
-#     def shoot(self, user, mousePos, *groups):
-#         super().__init__(*groups)
-#         currentTime = pygame.time.get_ticks()
-#         if self.curr_mag_ammo == 0:  # тип перезарядка
-#             if currentTime - self.last_shot > self.cooldown:
-#                 self.curr_mag_ammo = 100
-#             else:
-#                 return
-#
-#         self.curr_mag_ammo -= self.count_bullets  # минус патроны
-#         if currentTime - self.last_shot > self.weapon_cooldown:
-#             direction = (mousePos[0] - user.pos[0], mousePos[1] - user.pos[1]) \
-#                 if mousePos != user.pos else (1, 1)
-#             self.last_shot = currentTime
-#             arcDifference = self.spread / (self.count_bullets - 1)
-#             for proj in range(self.count_bullets):
-#                 corner = math.radians(arcDifference * proj - self.spread / 2)
-#                 projDir = super().rotate_vector(direction, corner)
-#             # тут кароче надо как-то вызвать уже projectile
-#             bullet = Projectile(user.pos, super().normalize_vector(projDir), 6, 1000, (255, 0, 0), projectiles_group)
-#
-#
+    def hit_sound(self):
+        random.choice(self.sounds).play()
+
+    def init_sounds(self):
+        self.sounds = [self.load_sound(f'melee_hit{i}.mp3') for i in range(1, 4)]
+
+
+class EnemyMelee(Melee):
+    def __init__(self, *groups):
+        super().__init__(*groups)
+
+
+# вот тут сами оружия делаю
+class Usp(PistolLikeGun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.damage_range = (10, 15)
+        self.ammo_lifetime = 900
+        self.curr_mag_ammo: int = 15
+        self.mag_capacity: int = 15
+        self.ammo_max: int = 15*4
+        self.all_ammo_current: int = 15*4
+        self.spread: float = 6.8
+        self.reload_time = 1.7
+        self.name: str = 'USP-S'
+        self.rarity = None
+        self.cooldown: float = 0.1
+
+        self.cur_frame = 21
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+        self.init_sounds()
+
+
+class Spas12(Shotgun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.damage_range = (30, 45)
+        self.ammo_lifetime = 300
+        self.curr_mag_ammo: int = 12
+        self.mag_capacity: int = 12
+        self.ammo_max: int = 12*4
+        self.all_ammo_current: int = 12*4
+        self.spread: float = 6.8
+        self.reload_time = 2.0
+        self.name: str = 'SPAS-12'
+        self.rarity = None
+        self.cooldown: float = 0.8
+
+        self.cur_frame = 73
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+        self.init_sounds()
+
+
+class M16(BurstGun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.ammo_lifetime = 1000
+        self.damage_range = (20, 25)
+        self.curr_mag_ammo: int = 32
+        self.mag_capacity: int = 32
+        self.ammo_max: int = 32*3
+        self.all_ammo_current: int = 32*3
+        self.spread: float = 6.8
+        self.reload_time = 3.0
+        self.name: str = 'M16'
+        self.rarity = None
+        self.cooldown: float = 0.2
+        self.burst_count_max = 4
+        self.burst_curr = 4
+        self.burst_timer: float = 0.3
+        self.cooldown: float = 0.025
+
+        self.cur_frame = 104
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+        self.init_sounds()
+
+
+class AK47(MachineGun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.ammo_lifetime = 1000
+        self.damage_range = (20, 25)
+        self.curr_mag_ammo: int = 24
+        self.mag_capacity: int = 24
+        self.ammo_max: int = 24*3
+        self.all_ammo_current: int = 24*3
+        self.spread: float = 6.8
+        self.reload_time = 2.0
+        self.name: str = 'AK-47'
+        self.rarity = None
+        self.cooldown: float = 0.1
+        self.can_shoot: bool = True
+
+        self.cur_frame = 134
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+        self.init_sounds()
+
+
+class Minigun(MachineGun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.ammo_lifetime = 1000
+        self.damage_range = (30, 35)
+        self.curr_mag_ammo: int = 100
+        self.mag_capacity: int = 100
+        self.ammo_max: int = 500
+        self.all_ammo_current: int = 500
+        self.spread: float = 6.8
+        self.reload_time = 3.0
+        self.name: str = 'MINIGUN'
+        self.rarity = None
+        self.cooldown: float = 0.1
+        self.can_shoot: bool = True
+
+        self.cur_frame = 86
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+        self.init_sounds()
+
+
+class Awp(PistolLikeGun):
+    def __init__(self, x, y, *groups):
+        super().__init__(x, y, *groups)
+        self.ammo_lifetime = 1000
+        self.damage_range = (40, 50)
+        self.curr_mag_ammo: int = 5
+        self.mag_capacity: int = 5
+        self.ammo_max: int = 25
+        self.all_ammo_current: int = 25
+        self.spread: float = 0.25
+        self.reload_time = 4
+        self.name: str = 'AWP'
+        self.rarity = None
+        self.cooldown: float = 2
+        self.can_shoot: bool = True
+
+        self.cur_frame = 95
+        self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
+        self.init_sounds()
+        self.sounds[Weapon.SHOOT] = self.load_sound('awp_shoot.mp3', 0.3)
+        self.sounds[Weapon.RELOAD] = self.load_sound('awp_reload.mp3')
 # class FreezeGun(Weapon):
 #     # Доделать торможение!!!
 #     def __init__(self, *groups):

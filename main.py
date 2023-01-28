@@ -2,8 +2,8 @@ import ast
 import os
 import sys
 from subprocess import Popen
-import time
 
+import pygame
 from pytmx import load_pygame
 
 from menu import StartMenu
@@ -59,10 +59,14 @@ class Pawn(pygame.sprite.Sprite):
         self.available_weapons = []
         self.equipped_weapon = None
         self.inventory = []
+        self.circle_mask = pygame.mask.from_surface(load_image("templates/circle.png"))
+        self.damage_amount = 15  # ТОЛЬКО ДЛЯ ВРАГОВ
 
         self.left_hand_slot = (0, 0)  # относительная позиция, считать от левого верхнего пикселя
         self.right_hand_slot = (0, 0)
         self.back_slot = (0, 0)
+        self.timing = time.time()
+        self.damage_cooldown = 1  # ТОЛЬКО ДЛЯ ВРАГОВ
 
     def cut_sheet(self, sheet, columns, rows):
         self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
@@ -83,6 +87,12 @@ class Pawn(pygame.sprite.Sprite):
 
         for group in colliding:  # обрабатываем столкновения со всеми объектами
             for el in group:
+                if self in enemies_group and el in players_group and el.alive:
+                    if pygame.sprite.collide_mask(self, el) and time.time() - self.timing > self.damage_cooldown:
+                        self.timing = time.time()
+                        random.choice(self.hit_sounds).play()
+                        el.damage(random.randint(*self.damage_amount))  # враг всем в радиусе урон наносит
+
                 if el == self or (self in players_group and (el in players_group or el in enemies_group)) or \
                         (self in enemies_group and el in players_group):
                     # игроки не сталкиваются друг с другом (и с врагами тож)
@@ -104,10 +114,18 @@ class Pawn(pygame.sprite.Sprite):
         self.rect.topleft = self.pos
         if self.available_weapons:
             wep, m_pos = self.available_weapons[self.equipped_weapon], pygame.mouse.get_pos()
-            wep.angle = 180 - math.degrees(math.atan2(m_pos[1] - wep.pos[1], m_pos[0] - wep.pos[0]))
+            # wep.angle = 180 - math.degrees(math.atan2(m_pos[1] - wep.pos[1], m_pos[0] - wep.pos[0]))
 
     def get_data(self):
         return {'POS': self.pos, 'HP': self.health, 'EQ_WEAPON': self.equipped_weapon}
+
+    def damage(self, amount):
+        self.health -= amount
+        if self.health <= 0:
+            self.health = 0
+            self.alive = False
+        if self in enemies_group:
+            self.kill()
 
 
 class Player(Pawn):  # игрок
@@ -145,10 +163,15 @@ class Player(Pawn):  # игрок
         self.image = pygame.transform.scale(self.states[self.curr_state][self.cur_frame], (72, 72))
 
         super(Player, self).init_rect()
-        self.timing = time.time()
         self.move_frame()
         # с перками потом еще перепишу, а то чета отдельный список хранить в котором умножают отдельные
         # переменные, как-то неоч, тк есть еще и просто список перков(
+
+    def get_player_looking_angle(self):
+        vec_pos = pygame.math.Vector2(self.pos - camera_pos)
+        direction = pygame.mouse.get_pos() - vec_pos
+        radius, angle = direction.as_polar()
+        return angle
 
     def move(self, server_player: list = False):
         super(Player, self).move()
@@ -158,32 +181,38 @@ class Player(Pawn):  # игрок
         else:
             k = pygame.key.get_pressed()
             m = pygame.mouse.get_pressed()
-            m_pos = pygame.mouse.get_pos()
             self.curr_state = 'IDLE'
             # TODO: ПЕРЕДЕЛАТЬ РАЗВОРОТ БАШКИ ПОД ПОЗИЦИЮ МЫШКИ
-            # direction = (m_pos[0] - self.pos[0], self[1] - self.pos[1]) if m_pos != self.pos else (1, 1)
-            # if direction[0] > 0 and direction[0] > 0:
-            #     pass
-            # elif
+            angle = self.get_player_looking_angle()
+            if -135 > angle > -180 or 135 <= angle <= 180:  # налево
+                self.look_at = 1  # 0-вниз 1-налево 2-направо 3-наверх
+            elif 45 <= angle <= 135:  # вниз
+                self.look_at = 0
+            elif 45 > angle > 0 or -45 <= angle <= 0:  # направо
+                self.look_at = 2
+            elif -45 >= angle >= -135:  # наверх
+                self.look_at = 3
+
             if k[pygame.K_w]:
                 self.movement_vector[1] += -1 * self.movement_speed
                 self.curr_state = 'WALK'
-                self.look_at = 3
             if k[pygame.K_s]:
                 self.movement_vector[1] += 1 * self.movement_speed
                 self.curr_state = 'WALK'
-                self.look_at = 0
             if k[pygame.K_a]:
                 self.movement_vector[0] += -1 * self.movement_speed
                 self.curr_state = 'WALK'
-                self.look_at = 1
             if k[pygame.K_d]:
                 self.movement_vector[0] += 1 * self.movement_speed
                 self.curr_state = 'WALK'
-                self.look_at = 2
             if k[pygame.K_r]:
                 if self.available_weapons and not self.available_weapons[self.equipped_weapon].reloading:
                     self.available_weapons[self.equipped_weapon].reload()
+            if k[pygame.K_q]:
+                if self.equipped_weapon != -1 and self.available_weapons:
+                    print('dropped weapon',  self.available_weapons, self.equipped_weapon)
+                    self.available_weapons.pop(-1)
+                    self.equipped_weapon = -1
 
             if m[0]:  # лкм нажата
                 self.shoot(pygame.mouse.get_pos())
@@ -191,12 +220,14 @@ class Player(Pawn):  # игрок
         if pygame.sprite.spritecollideany(self, weapons_group):
             for wep in weapons_group:
                 if self.rect.colliderect(wep.rect):
-                    if k[pygame.K_a]:
+                    if k[pygame.K_e]:
+                        if self.equipped_weapon != -1 and self.available_weapons:
+                            self.available_weapons.pop(-1)
+                            self.equipped_weapon = -1
                         wep.pick_up(self)
                     else:
                         self.action_text = f'PICK UP {wep.name}'
 
-        self.action_text = f'RELOADING...'
         self.collision_test()
 
     def move_frame(self):
@@ -205,24 +236,37 @@ class Player(Pawn):  # игрок
 
     def shoot(self, mouse_pos):  # стреляем
         if self.available_weapons and self.available_weapons[self.equipped_weapon].can_shoot:
-            bul_data = self.available_weapons[self.equipped_weapon].shoot(self, mouse_pos)
+            bul_data = self.available_weapons[self.equipped_weapon].shoot(self, mouse_pos, camera_pos)
             if bul_data:
-                bul_data[0][0] += self.right_hand_slot[0]
-                bul_data[0][1] += self.right_hand_slot[1]
-                Projectile(*bul_data, projectiles_group)
+                if self.available_weapons[self.equipped_weapon].shoot_type == Weapon.SHOTGUN:
+                    for i in range(len(bul_data)):
+                        bul_data[i][0][0] += self.right_hand_slot[0]
+                        bul_data[i][0][1] += self.right_hand_slot[1]
+                        Projectile(*bul_data[i], enemies_group, projectiles_group)
+                else:
+                    bul_data[0][0] += self.right_hand_slot[0]
+                    bul_data[0][1] += self.right_hand_slot[1]
+                    Projectile(*bul_data, enemies_group, projectiles_group)
 
     def update(self, *args):
-        self.action_text = ''
-        if time.time() - self.timing > 0.35:
-            self.move_frame()
-        self.image = pygame.transform.scale(self.states[self.curr_state][self.cur_frame + self.look_at * 4], (72, 72))
-        self.prev_pos = self.pos
-        self.move()
-        if self.available_weapons:  # TODO: ПЕРЕМЕЩАТЬ ВСЕ ОРУЖИЯ(ВСЕ СЛОТЫ ДВИГАТЬ)
-            self.available_weapons[self.equipped_weapon].pos = \
-                self.available_weapons[self.equipped_weapon].rect.topleft = \
-                tuple(map(sum, zip(self.left_hand_slot, self.pos)))
-        super(Player, self).update()
+        if self.alive:
+            self.action_text = ''
+            if time.time() - self.timing > 0.35:
+                self.move_frame()
+            self.image = pygame.transform.scale(self.states[self.curr_state][self.cur_frame + self.look_at * 4], (72, 72))
+            self.prev_pos = self.pos
+            if self.available_weapons and self.available_weapons[self.equipped_weapon].reloading:
+                self.action_text = f'RELOADING...'
+            self.move()
+            if self.available_weapons:  # TODO: ПЕРЕМЕЩАТЬ ВСЕ ОРУЖИЯ(ВСЕ СЛОТЫ ДВИГАТЬ)
+                self.available_weapons[self.equipped_weapon].pos = \
+                    self.available_weapons[self.equipped_weapon].rect.topleft = \
+                    tuple(map(sum, zip(self.left_hand_slot, self.pos)))
+                ang = int(self.get_player_looking_angle())
+                self.available_weapons[self.equipped_weapon].angle = 180 - ang
+            super(Player, self).update()
+        else:
+            self.action_text = 'DEAD'
 
     def new_perk_add(self, perk):
         perk.use(self)
@@ -236,31 +280,40 @@ class Player(Pawn):  # игрок
 class Enemy(Pawn):  # класс проутивников, от него наследоваться будут подклассы
     def __init__(self, x: int, y: int, *groups):
         super().__init__(x, y, *groups)
-        self.movement_speed = 2
+        self.movement_speed = random.uniform(1.0, 3.0)
         self.health = 100
+        self.damage_amount = (5, 15)
         self.alive = True
+        self.damage_cooldown = 0.5
+        self.available_weapons = []
+        self.equipped_weapon = -1
+        self.hit_sounds = [Weapon.load_sound(Melee, f'melee_hit{i}.mp3', 0.5) for i in range(1, 4)]
         super(Enemy, self).init_rect()
 
     def move(self):  # obj - объекты с которыми можем столкнуться
         super(Enemy, self).move()
 
-        target = [(p, find_vector_len(self.pos, p.pos)) for p in players_group]  # берем живых игроков
-        target = sorted(target, key=lambda x: (x[1], x[0].health, x[0].nick))[0][0]  # кого бьем
-        if target.pos[1] < self.pos[1]:
-            self.movement_vector[1] += -1 * self.movement_speed  # вверх
-        if target.pos[1] > self.pos[1]:
-            self.movement_vector[1] += 1 * self.movement_speed  # вниз
-        if target.pos[0] < self.pos[0]:
-            self.movement_vector[0] += -1 * self.movement_speed  # налево
-        if target.pos[0] > self.pos[0]:
-            self.movement_vector[0] += 1 * self.movement_speed  # направо
+        target = [(p, find_vector_len(self.pos, p.pos)) for p in players_group if p.alive]  # берем живых игроков
+        if target:
+            target = sorted(target, key=lambda x: (x[1], x[0].health, x[0].nick))[0][0]  # кого бьем
+            if target.pos[1] < self.pos[1]:
+                self.movement_vector[1] += -1 * self.movement_speed  # вверх
+            if target.pos[1] > self.pos[1]:
+                self.movement_vector[1] += 1 * self.movement_speed  # вниз
+            if target.pos[0] < self.pos[0]:
+                self.movement_vector[0] += -1 * self.movement_speed  # налево
+            if target.pos[0] > self.pos[0]:
+                self.movement_vector[0] += 1 * self.movement_speed  # направо
 
-        self.collision_test()
+            self.collision_test()
 
     def update(self, *args):
         self.prev_pos = self.pos
         self.move()
         super(Enemy, self).update()
+
+    def get_data(self):
+        return self.pos, self.health, self.movement_speed
 
 
 class Deployable(Pawn):  # гаджетиы - турели/мины и всякое такое что пассивно наносит урон врагам
@@ -313,7 +366,7 @@ class Tile(pygame.sprite.Sprite):  # просто плитки, никакой �
 class Projectile(pygame.sprite.Sprite):  # пуля сама
     bullet_image_default = pygame.transform.scale(load_image("weapons/bullet1.png"), (8, 8))
 
-    def __init__(self, source, target, speed, lifetime, *groups):
+    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups):
         # откуда, куда, скорость, сколько длится жизнь пули, цвет
         super().__init__(*groups)
         self.image = Projectile.bullet_image_default
@@ -323,6 +376,8 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
         self.speed = speed
         self.lifetime = lifetime
         self.when_created = pygame.time.get_ticks()
+        self.damage = damage
+        self.enemy_team = enemy_team
 
     def move(self, time):  # размер экрана и время
         if pygame.time.get_ticks() > self.when_created + self.lifetime:
@@ -333,6 +388,12 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
 
     def update(self):
         self.move(2)
+        if pygame.sprite.spritecollideany(self, walls_group):
+            self.kill()
+        for el in self.enemy_team:
+            if self.rect.colliderect(el.rect):  # столкновение по у в будущей позиции, туда не идем
+                el.damage(self.damage)
+                self.kill()
 
     def render(self, surface):
         surface.blit(self.image, self.pos)
@@ -342,13 +403,14 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
             return obj.__name__
 
     def hit(self, bullet, enemy):
-        if self.meet(bullet, enemy) == 'Enemy':
-            # self.health -= 1 # типо нужно вычитать какое-то колво хп у противника
-            ...
+        ...
 
     def freeze(self, bullet, enemy):
         if self.meet(bullet, enemy) == 'Enemy':
             ...  # надо замедлять противника
+
+    def get_data(self):
+        return self.pos, self.damage, self.movement_vector
 
 
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
@@ -357,17 +419,24 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 
 def game_loop():
-    global real_player
+    global real_player, camera_pos
     if mp_game:
         net = Network(ip_port)
     exit_condition = False
     finish_game = False
 
+    half_x, half_y = screen.get_width() // 2, screen.get_height() // 2  # для камеры
+
     players = {}  # содержит класс игрока по никам
 
     # спаун
     real_player = Player(430, 300, my_nickname, players_group)  # игрк
-    Gun(460, 330, weapons_group)
+    Usp(520, 250, weapons_group)
+    Spas12(520, 300, weapons_group)
+    M16(520, 350, weapons_group)
+    AK47(520, 400, weapons_group)
+    Minigun(520, 450, weapons_group)
+    Awp(520, 500, weapons_group)
     players[real_player.nick] = real_player
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
@@ -385,15 +454,16 @@ def game_loop():
             if im_a_host:  # если игрок хостит сервер - он и обрабатывает всю инфу
                 # и посылает через сервер другим пепликсам
                 to_send = [players[nick].get_data() for nick in players]
+                to_send.extend([b.get_data() for b in projectiles_group])
+                to_send.extend([e.get_data() for e in enemies_group])
                 reply = parse_data(send_data(net, 'HOST', to_send))  # отправляем на серв обработанную инфу
                 # print('HOST', reply)
             else:  # игрок - клиент(подключился на чужой сервер)
-                to_send = [
-                    real_player.get_data()]  # сюда вписывать то, что отправляем на сервер: себя и все что с ним связано
+                to_send = [real_player.get_data()]  # сюда вписывать то, что отправляем на сервер:
+                # себя и все что с ним связано
+                to_send.extend([b.get_data() for b in projectiles_group])
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
-                # print('USER', reply)
             try:  # обновляем инфу об игроках
-
                 for p_nick in reply[0]:
                     if p_nick == real_player.nick:
                         continue
@@ -417,6 +487,10 @@ def game_loop():
             e.update(screen)
         for bullet in projectiles_group:
             bullet.update()
+
+        camera_pos.x = real_player.rect.centerx - half_x  # тащим камеру
+        camera_pos.y = real_player.rect.centery - half_y
+
         draw()  # рендерим тут
 
         pygame.display.flip()
@@ -447,8 +521,8 @@ def parse_data(data):
 
 
 def draw():
-    tile_group.draw(screen)
-
+    for t in tile_group:
+        screen.blit(t.image, t.rect.topleft - camera_pos)
     all_sprites = [*players_group.sprites(), *enemies_group.sprites(), *deployable_group.sprites(),
                    *items_group.sprites(), *walls_group.sprites(), *weapons_group.sprites(),
                    *projectiles_group.sprites()]
@@ -460,15 +534,14 @@ def draw():
                 transformed_img = pygame.transform.flip(transformed_img, False, True)
             else:
                 transformed_img = pygame.transform.rotate(spr.image, spr.angle)
-            new_rect = transformed_img.get_rect(center=spr.image.get_rect(topleft=spr.rect.topleft).center)
 
-            screen.blit(transformed_img, new_rect.topleft)
+            screen.blit(transformed_img, spr.rect.topleft - camera_pos)
         elif spr in players_group:
             new_rect = spr.image.get_rect(center=spr.image.get_rect(topleft=spr.rect.topleft).center)
-            new_rect.topleft = [new_rect.topleft[0], new_rect.topleft[1] - 25]
+            new_rect.topleft = [new_rect.topleft[0] - camera_pos.x, new_rect.topleft[1] - 25 - camera_pos.y]
             screen.blit(spr.image, new_rect.topleft)
         else:
-            screen.blit(spr.image, spr.rect)
+            screen.blit(spr.image, spr.rect.topleft - camera_pos)
 
     # рисуем HUD
     curr = real_player.available_weapons[real_player.equipped_weapon].curr_mag_ammo \
@@ -478,8 +551,7 @@ def draw():
     wep_name = real_player.available_weapons[real_player.equipped_weapon].name \
         if real_player.available_weapons else 'Nothing'
     screen.blit(font.render(f'HP: {real_player.health}', True, (15, 15, 15)), get_screen_cords(5, 90))
-    screen.blit(font.render(f'{curr}/{total}', True, (15, 15, 15)), get_screen_cords(90, 90))
-    screen.blit(font.render(f'{wep_name}', True, (15, 15, 15)), get_screen_cords(75, 90))
+    screen.blit(font.render(f'{wep_name}  {curr}/{total}', True, (15, 15, 15)), get_screen_cords(75, 90))
     screen.blit(font.render(f'{real_player.action_text}', True, (15, 15, 15)), get_screen_cords(35, 90))
 
 
@@ -520,6 +592,7 @@ walls_group = pygame.sprite.Group()
 weapons_group = pygame.sprite.Group()
 font = pygame.font.SysFont('Cascadia Code', 30)
 
+camera_pos = pygame.math.Vector2(100, 100)
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
 
