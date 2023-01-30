@@ -3,14 +3,9 @@ import random
 import pygame
 import pygame_widgets
 from pygame_widgets.button import Button
-# from pygame_widgets.slider import Slider
-# from pygame_widgets.dropdown import Dropdown
 from pygame_widgets.textbox import TextBox
 from pygame_widgets.widget import WidgetBase
 from bd import *
-import sys
-from PyQt5.QtWidgets import QApplication
-
 
 
 class Label(Button):
@@ -24,8 +19,7 @@ class Label(Button):
 class Menu:
     PLAY = 'play'
     QUIT = 'quit'
-    WHITE, BLACK, D_GRAY, L_GRAY = (
-        255, 255, 255), (0, 0, 0), (87, 87, 87), (180, 180, 180)
+    WHITE, BLACK, D_GRAY, L_GRAY = (255, 255, 255), (0, 0, 0), (87, 87, 87), (180, 180, 180)
     pygame.font.init()
     font = pygame.font.SysFont('Cascadia Code', 30)
 
@@ -56,6 +50,7 @@ class Menu:
     def quit(self):
         self.destroy()
         self.result = self.QUIT
+        pygame.quit()
 
     def destroy(self):
         self.running = False
@@ -98,34 +93,23 @@ class StartMenu(Menu):
 
 
 class EndMenu(Menu):
-    def __init__(self, screen: pygame.surface.Surface, db: Record):
+    def __init__(self, screen: pygame.surface.Surface, money: int):
         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
         #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
-        self._db = db
-        all_players = self._db.get_records()
-        labels = []
-        for row in range(len(all_players)):
-            for col in range(len(all_players)):
-                for player in all_players:
-                    label = Label(screen, 100 * row, 30 * col + 30, 100, 50, text=f'{player}', textColour=Menu.BLACK,
-                            font=pygame.font.SysFont('Cascadia Code', 50))
-                    labels.append(label)
-
         quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
                              onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
-        # label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
-        #               font=pygame.font.SysFont('Cascadia Code', 50))
-        super(EndMenu, self).__init__(quit_button, *labels)
+        label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+                      font=pygame.font.SysFont('Cascadia Code', 50))
+        super(EndMenu, self).__init__(quit_button, label)
 
 
 class SettingsMenu(Menu):
     def __init__(self, screen: pygame.surface.Surface):
         back_button = Button(screen, 50, 150, 100, 30, text='Back', radius=5,
                              onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
-        label = Label(screen, 300, 0, 100, 50, text='Settings',
-                      textColour=Menu.BLACK, font=self.font)
+        label = Label(screen, 300, 0, 100, 50, text='Settings', textColour=Menu.BLACK, font=self.font)
         super(SettingsMenu, self).__init__(back_button, label)
 
     def back(self):
@@ -138,20 +122,16 @@ class CreateGame(Menu):
         self._db = db
         back_button = Button(screen, 50, 250, 65, 30, text='Back', radius=5,
                              onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
-        label = Label(screen, 300, 0, 100, 50, text='Start/Join the game...',
-                      textColour=Menu.BLACK, font=self.font)
-        nick_label = Label(screen, 300, 140, 150, 50,
-                           text='Nick:', textColour=Menu.BLACK, font=self.font)
+        label = Label(screen, 300, 0, 100, 50, text='Start/Join the game...', textColour=Menu.BLACK, font=self.font)
+        nick_label = Label(screen, 300, 140, 150, 50, text='Nick:', textColour=Menu.BLACK, font=self.font)
         solo = Button(screen, 50, 100, 65, 30, text='Solo', radius=5,
                       onClick=self.solo, inactiveColour=Menu.WHITE, font=self.font)
         mp = Button(screen, 50, 150, 130, 30, text='Multiplayer', radius=5,
                     onClick=self.mp, inactiveColour=Menu.WHITE, font=self.font)
-        self.nickname = TextBox(
-            screen, 400, 150, 135, 30, radius=5, inactiveColour=Menu.WHITE, font=self.font)
+        self.nickname = TextBox(screen, 400, 150, 135, 30, radius=5, inactiveColour=Menu.WHITE, font=self.font)
         if nick is not None:
             self.nickname.setText(nick)
-        super(CreateGame, self).__init__(back_button,
-                                         solo, mp, self.nickname, label, nick_label)
+        super(CreateGame, self).__init__(back_button, solo, mp, self.nickname, label, nick_label)
 
     def mp(self):
         global nick
@@ -159,11 +139,10 @@ class CreateGame(Menu):
             nick = ''.join(self.nickname.text)
             self._db.add_nickname(nick)
             self.destroy()
-            self.result = Multiplayer(self.screen).run()
+            self.result = Multiplayer(self.screen, self._db).run()
 
     def solo(self):
         if self.nickname.text:
-            nick = ''.join(self.nickname.text)
             self._db.add_nickname(nick)
             self.destroy()
             self.play(False, False, ''.join(self.nickname.text))
@@ -174,18 +153,17 @@ class CreateGame(Menu):
 
 
 class Multiplayer(Menu):  # помогите
-    def __init__(self, screen: pygame.surface.Surface):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
         global nick
         import json
-        self.fast_list = json.load(
-            open('FAV_SERVERS.txt', 'r', encoding='utf-8'))
+        self.fast_list = json.load(open('FAV_SERVERS.txt', 'r', encoding='utf-8'))
         self.fast_list = ['None' if self.fast_list['1'][i] == 0 else
                           self.fast_list['1'][i] for i in range(len(self.fast_list['1']))]
         user_ip, user_port = get_ip_port()
 
         create = Button(screen, 50, 200, 85, 30, text='Create', radius=5,
-                        onClick=lambda: self.play(
-                            True, True, nick, [user_ip, user_port]),
+                        onClick=lambda: self.play(True, True, nick, [user_ip, user_port]),
                         inactiveColour=Menu.WHITE, font=self.font)
         con = Button(screen, 50, 100, 100, 30, text='Connect', radius=5,
                      onClick=lambda: self.connect(self.ip.text, self.port.text), inactiveColour=Menu.WHITE,
@@ -206,25 +184,19 @@ class Multiplayer(Menu):  # помогите
 
         back_button = Button(screen, 50, 325, 65, 30, text='Back', radius=5,
                              onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
-        self.ip = TextBox(screen, 100, 150, 165, 30, radius=5,
-                          inactiveColour=Menu.WHITE, font=self.font)
-        self.port = TextBox(screen, 330, 150, 135, 30, radius=5,
-                            inactiveColour=Menu.WHITE, font=self.font)
+        self.ip = TextBox(screen, 100, 150, 165, 30, radius=5, inactiveColour=Menu.WHITE, font=self.font)
+        self.port = TextBox(screen, 330, 150, 135, 30, radius=5, inactiveColour=Menu.WHITE, font=self.font)
 
         txt_ip = Label(screen, 30, 140, 100, 50, text='ip:',
                        textColour=Menu.D_GRAY, font=self.font)
-        txt_port = Label(screen, 250, 140, 100, 50, text='port:',
-                         textColour=Menu.D_GRAY, font=self.font)
+        txt_port = Label(screen, 250, 140, 100, 50, text='port:', textColour=Menu.D_GRAY, font=self.font)
 
-        ip_my = Label(screen, 350, 225, 100, 50,
-                      text=f'{user_ip}', textColour=Menu.BLACK, font=self.font)
-        port_my = Label(screen, 100, 250, 100, 50,
-                        text=f'{user_port}', textColour=Menu.BLACK, font=self.font)
+        ip_my = Label(screen, 350, 225, 100, 50, text=f'{user_ip}', textColour=Menu.BLACK, font=self.font)
+        port_my = Label(screen, 100, 250, 100, 50, text=f'{user_port}', textColour=Menu.BLACK, font=self.font)
 
         txt_ip_my = Label(screen, 150, 225, 100, 50, text='Your server will run on ip:',
                           textColour=Menu.D_GRAY, font=self.font)
-        txt_port_my = Label(screen, 50, 250, 100, 50, text='port:',
-                            textColour=Menu.D_GRAY, font=self.font)
+        txt_port_my = Label(screen, 50, 250, 100, 50, text='port:', textColour=Menu.D_GRAY, font=self.font)
         line = Label(screen, 160, 165, 150, 50, text='——————————————————',
                      textColour=Menu.D_GRAY, font=self.font)
         super(Multiplayer, self).__init__(create, con, label, back_button, self.ip, ip_my, self.port, port_my,
@@ -243,6 +215,7 @@ class Multiplayer(Menu):  # помогите
         if self.fast_list[i] != 'None':
             self.ip.setText(self.fast_list[i].split(':')[0])
             self.port.setText(self.fast_list[i].split(':')[1])
+
 
 
 class AllTrinkets(Menu):
@@ -349,4 +322,3 @@ def get_ip_port():
 
 
 nick = None
-
