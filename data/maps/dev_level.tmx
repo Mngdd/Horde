@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="left-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="7" nextobjectid="14">
+<map version="1.9" tiledversion="1.9.2" orientation="orthogonal" renderorder="left-down" width="30" height="20" tilewidth="32" tileheight="32" infinite="0" nextlayerid="9" nextobjectid="7">
  <editorsettings>
   <export target="dev_level.csv" format="csv"/>
  </editorsettings>
@@ -14,6 +14,27 @@
  </tileset>
  <tileset firstgid="385" name="TX Struct" tilewidth="32" tileheight="32" tilecount="256" columns="16">
   <image source="../templates/outside/TX Struct.png" width="512" height="512"/>
+ </tileset>
+ <tileset firstgid="641" name="sci" tilewidth="32" tileheight="32" tilecount="64" columns="8">
+  <image source="../templates/sci/SCi-fi assets planet one.png" width="256" height="256"/>
+ </tileset>
+ <tileset firstgid="705" name="TX Props" tilewidth="32" tileheight="32" tilecount="256" columns="16">
+  <image source="../templates/outside/TX Props.png" width="512" height="512"/>
+  <tile id="62">
+   <properties>
+    <property name="shop_item" type="bool" value="true"/>
+   </properties>
+  </tile>
+  <tile id="151">
+   <properties>
+    <property name="shop" type="bool" value="true"/>
+   </properties>
+  </tile>
+  <tile id="167">
+   <properties>
+    <property name="shop" type="bool" value="true"/>
+   </properties>
+  </tile>
  </tileset>
  <layer id="1" name="floor" width="30" height="20">
   <data encoding="csv">
@@ -46,8 +67,8 @@
 0,0,0,0,0,0,0,0,0,0,0,98,0,170,0,100,0,0,437,438,0,0,0,0,498,499,0,0,0,105,
 0,0,0,0,0,0,0,0,0,0,0,98,0,85,115,116,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
 0,0,0,0,0,0,0,0,0,0,0,98,0,101,131,132,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
-0,0,0,0,0,0,0,0,0,0,0,114,167,116,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
-0,0,0,0,0,0,0,0,0,0,0,130,183,132,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
+0,0,0,0,0,0,0,0,856,0,0,114,167,116,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
+0,0,0,0,0,0,0,0,872,0,0,130,183,132,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,105,
@@ -63,17 +84,22 @@
 134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,134,137
 </data>
  </layer>
- <objectgroup id="3" name="enemy_spawnpoints">
-  <object id="10" x="101" y="219">
+ <objectgroup id="3" name="shops">
+  <object id="2" x="272" y="192">
    <point/>
   </object>
-  <object id="11" x="86" y="536">
+ </objectgroup>
+ <objectgroup id="8" name="enemy_spawnpoints">
+  <object id="3" x="896" y="96">
    <point/>
   </object>
-  <object id="12" x="779" y="225">
+  <object id="4" x="896" y="576">
    <point/>
   </object>
-  <object id="13" x="773" y="548">
+  <object id="5" x="32" y="576">
+   <point/>
+  </object>
+  <object id="6" x="32" y="96">
    <point/>
   </object>
  </objectgroup>
