@@ -138,14 +138,14 @@ class Pawn(pygame.sprite.Sprite):
             self.kill()
             Coin(self.hitbox.center, coins_group)
 
-    def draw_health_bar(self, screen: pygame.Surface):
+    def draw_health_bar(self, screen: pygame.Surface, camera_pos: pygame.math.Vector2):
         # для оптимизации можно рисовать это в self.image и перерисовывать, когда меняется здоровье,
         # но тогда придется копировать картинку для каждого
         height = 5
-        y = self.rect.y + 32 - height
+        y = self.rect.y + 32 - height - camera_pos.y
         width = round(32 * self.health / self.max_health)
-        pygame.draw.rect(screen, (0, 0, 0), pygame.rect.Rect(self.rect.x, y, self.rect.width, height))  # черная часть
-        pygame.draw.rect(screen, (255, 0, 0), pygame.rect.Rect(self.rect.x, y, width, height))  # красная часть
+        pygame.draw.rect(screen, (0, 0, 0), pygame.rect.Rect(self.rect.x - camera_pos.x, y, self.rect.width, height))  # черная часть
+        pygame.draw.rect(screen, (255, 0, 0), pygame.rect.Rect(self.rect.x - camera_pos.x, y, width, height))  # красная часть
 
 
 class Player(Pawn):  # игрок
@@ -162,7 +162,7 @@ class Player(Pawn):  # игрок
                        'DEATH': self.cut_sheet(load_image('characters/skeleton/skeleton_death.png'), 4, 4)}
 
         self.movement_speed = 5
-        self.health = 75
+        self.health = 100
         self.max_health = 100
         self.alive = True
         self.curr_state = 'IDLE'
@@ -352,10 +352,6 @@ class Enemy(Pawn):  # класс проутивников, от него нас�
             self.collision_test()
 
     def update(self, *args):
-        if DEBUG:
-            if any(pygame.mouse.get_pressed()):
-                if self.hitbox.collidepoint(*pygame.mouse.get_pos()):
-                    self.update_health(-25)
         self.prev_pos = self.pos
         self.move()
         super(Enemy, self).update()
@@ -557,13 +553,15 @@ def game_loop():
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
 
-    waves = [2] #[2, 5, 10]  # кол-ва противников в волнах
+    waves = [2, 6, 14]  # кол-ва противников в волнах
+    pause_duration = 20000  # время между волнами
+    spawn_rate = 3500  # время между спавнами
     wave_index = 0
     wave_ongoing = False  # идет ли волна. если False, то перерыв
     enemies_to_spawn = 0  # сколько врагов еще заспавнить (из всех спавнпоинтов за 1 раз)
 
     pygame.time.set_timer(wave_start_event, 1000, 1)  # через секунду начнется волна
-    pygame.time.set_timer(enemy_spawn_event, 1000)  # ивент срабатывает постоянно, но спавн при enemies_to_spawn > 0
+    pygame.time.set_timer(enemy_spawn_event, spawn_rate)  # ивент срабатывает постоянно, но спавн при enemies_to_spawn > 0
 
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
         if exit_condition:  # закрываем игру да
@@ -617,7 +615,7 @@ def game_loop():
                 wave_ongoing = True
 
         if len(enemies_group) == 0 and enemies_to_spawn <= 0 and wave_ongoing:  # конец волны
-            pygame.time.set_timer(wave_start_event, 5000, 1)
+            pygame.time.set_timer(wave_start_event, pause_duration, 1)
             wave_index += 1
             if wave_index >= len(waves):
                 finish_game = True
@@ -686,8 +684,8 @@ def draw():
             screen.blit(spr.image, new_rect.topleft)
         else:
             screen.blit(spr.image, spr.rect.topleft - camera_pos)
-        if isinstance(spr, Pawn):
-            spr.draw_health_bar(screen)
+            if isinstance(spr, Pawn):  # для игрока не рисуем, т.к. баг (шкала слишком широкая)
+                spr.draw_health_bar(screen, camera_pos)
 
     # рисуем HUD
     curr = real_player.available_weapons[real_player.equipped_weapon].curr_mag_ammo \
@@ -745,6 +743,7 @@ deployable_group = pygame.sprite.Group()
 items_group = pygame.sprite.Group()
 walls_group = pygame.sprite.Group()
 weapons_group = pygame.sprite.Group()
+coins_group = pygame.sprite.Group()
 font = pygame.font.SysFont('Cascadia Code', 30)
 
 b_ids = []
@@ -765,15 +764,7 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     if im_a_host:
         SERVER = Popen([sys.executable, 'server.py'])  # парралельно с игрой запускаем сервер
 
-    tile_group = pygame.sprite.Group()  # просто плитки, никакой коллизии/взаимодействия
-    players_group = pygame.sprite.Group()
-    enemies_group = pygame.sprite.Group()
-    deployable_group = pygame.sprite.Group()
-    items_group = pygame.sprite.Group()
-    walls_group = pygame.sprite.Group()
-    coins_group = pygame.sprite.Group()
     shop: Shop = None
-
     game_map = None  # просто чтоб было
     enemy_spawnpoints = None
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
