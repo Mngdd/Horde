@@ -524,9 +524,10 @@ class Shop(pygame.sprite.Sprite):  # от спрайта наследовани�
             height = 48
             y = i * (height + 10)
             new_btn = Button(screen, x, y, width - label_width, height, text=weapon.name, image=weapon.image,
-                             textHAlign='left', imageHAlign='right', onClick=self.buy(weapon_class, weapon.price))
+                             textHAlign='left', imageHAlign='right', onClick=self.buy(weapon_class, weapon.price),
+                             font=pygame.font.SysFont('Cascadia Code', 30))
             new_label = Label(screen, x + width - label_width, y, label_width, height, text=str(weapon.price),
-                              textColour='grey')
+                              textColour='grey', font=pygame.font.SysFont('Cascadia Code', 30))
             self.overlay_widgets.append(new_btn)
             self.overlay_widgets.append(new_label)
             weapon.kill()
