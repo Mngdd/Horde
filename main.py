@@ -3,7 +3,7 @@ import sys
 from network import Network
 import pygame
 from pytmx import load_pygame
-from menu import StartMenu, EndMenu
+from menu import *
 import ast
 import random
 from perks import *
@@ -152,6 +152,8 @@ class Player(Pawn):  # игрок
         # с перками потом еще перепишу, а то чета отдельный список хранить в котором умножают отдельные
         # переменные, как-то неоч, тк есть еще и просто список перков(
 
+        self.overlay_open = False  # для магаза, меню паузы может
+
     def move(self, server_player=False):
         super(Player, self).move()
 
@@ -176,9 +178,21 @@ class Player(Pawn):  # игрок
                 coin.kill()
                 self.money += 1
 
+    def check_shop(self):
+        global shop
+        if pygame.key.get_pressed()[pygame.K_e] and not self.overlay_open:
+            if shop.can_access(self):
+                shop.open_overlay()
+                self.overlay_open = True
+        if pygame.key.get_pressed()[pygame.K_ESCAPE] and self.overlay_open:
+            shop.close_overlay()
+            self.overlay_open = False
+
     def update(self, *args):
-        self.prev_pos = self.pos
-        self.move()
+        if not self.overlay_open:
+            self.prev_pos = self.pos
+            self.move()
+        self.check_shop()
         self.pick_up_coins()
         super(Player, self).update()
 
@@ -243,6 +257,7 @@ class Item(pygame.sprite.Sprite):  # предметы лежащие на зем
         self.image = Pawn.image  # тк это базовый класс, его не должно быть в игре
         self.rect = self.image.get_rect()
         self.pos = [x, y]
+        self.rect.topleft = self.pos
         self.name = 'PLACEHOLDER'
 
         # скорость нужна чтобы предметы разлетались в разные стороны(например при смерти персонажа)
@@ -313,6 +328,54 @@ class Coin(pygame.sprite.Sprite):
         self.rect.center = self.pos
 
 
+class ScreenDarken(WidgetBase):
+    def __init__(self):
+        super(ScreenDarken, self).__init__(screen, 0, 0, size[0], size[1])
+        self.rect = pygame.rect.Rect(0, 0, size[0], size[1])
+        self.surf = pygame.surface.Surface(size).convert_alpha()
+        pygame.draw.rect(self.surf, (0, 0, 0, 127), self.rect)
+        self.hidden = False
+
+    def draw(self):
+        if not self.hidden:
+            self.win.blit(self.surf, (0, 0))
+
+    def listen(self, events):
+        pass
+
+    def hide(self):
+        self.hidden = True
+
+    def show(self):
+        self.hidden = False
+
+
+class Shop(pygame.sprite.Sprite):  # от спрайта наследование чтобы когда камера будет работало
+    def __init__(self, x: int, y: int, closed: bool = True):
+        super(Shop, self).__init__()
+        self.rect = pygame.rect.Rect(x - 32, y - 32, 32 * 3, 32 * 3)  # область 3x3 тайла вокруг
+        self.overlay_widgets = [
+            ScreenDarken(),
+            Button(screen, 600, 500, 70, 30, text='Пистолет 1'),
+            ButtonArray(screen, 60, 40, 500, 400, (3, 7))
+        ]
+        if closed:
+            self.close_overlay()
+
+    def can_access(self, player: Player):
+        return player.rect.colliderect(self.rect)
+
+    def open_overlay(self):
+        print('открыт магаз')
+        for widget in self.overlay_widgets:
+            widget.show()
+
+    def close_overlay(self):
+        print('закрыт магаз')
+        for widget in self.overlay_widgets:
+            widget.hide()
+
+
 def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
     return ((point_a[0] - point_b[0]) ** 2 +
             (point_a[1] - point_b[1]) ** 2) ** 0.5
@@ -371,7 +434,8 @@ def game_loop():
 
         screen.fill(BGCOLOR)
 
-        for event in pygame.event.get():
+        events = pygame.event.get()
+        for event in events:
             if event.type == pygame.QUIT:
                 exit_condition = True
             elif event.type == enemy_spawn_event and enemies_to_spawn > 0:  # спавн противников
@@ -395,6 +459,7 @@ def game_loop():
             e.update(screen)
 
         draw()  # рендерим тут
+        pygame_widgets.update(events)  # чтобы интерфейс поверх всего рисовался
 
         pygame.display.flip()
         clock.tick(60)
@@ -447,9 +512,9 @@ def main():
 
 
 def load_level(level_name):
-    global game_map, enemy_spawnpoints
+    global game_map, shop, enemy_spawnpoints
     game_map = load_pygame(level_name)
-    for layer in game_map.visible_layers:
+    for layer_number, layer in enumerate(game_map.visible_layers):
         if layer.name == 'floor':
             for x, y, surf in layer.tiles():
                 Tile(x * 32, y * 32, tile_group, surf)
@@ -459,9 +524,12 @@ def load_level(level_name):
     for object_group in game_map.objectgroups:
         if object_group.name == 'enemy_spawnpoints':
             enemy_spawnpoints = [(point.x, point.y) for point in object_group]
-            break
-    else:
-        print('warning: no enemy_spawnpoints')
+        elif object_group.name == 'shops':
+            for point in object_group:
+                shop = Shop(point.x, point.y)
+                break
+    assert enemy_spawnpoints, 'нет спавнпоинтов'
+    assert shop, 'нет магазина'
 
 
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
@@ -486,6 +554,7 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     items_group = pygame.sprite.Group()
     walls_group = pygame.sprite.Group()
     coins_group = pygame.sprite.Group()
+    shop: Shop = None
 
     game_map = None  # просто чтоб было
     enemy_spawnpoints = None
