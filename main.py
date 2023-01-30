@@ -13,6 +13,8 @@ from perks import *
 from network import Network
 from trinkets import *
 from weapon import *
+from menu import *
+from bd import *
 
 # прикольно так накидал конечн
 
@@ -28,7 +30,7 @@ BGCOLOR = 'white'
 screen = pygame.display.set_mode(size)
 pygame.display.set_caption("Top Down")
 clock = pygame.time.Clock()
-
+count_kill = 0
 
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
@@ -72,6 +74,8 @@ class Pawn(pygame.sprite.Sprite):
         self.inventory = []
         self.circle_mask = pygame.mask.from_surface(load_image("templates/circle.png"))
         self.damage_amount = 15  # ТОЛЬКО ДЛЯ ВРАГОВ
+        self.count_kill = 0
+        self._db = Record()
 
         self.left_hand_slot = (0, 0)  # относительная позиция, считать от левого верхнего пикселя
         self.right_hand_slot = (0, 0)
@@ -137,6 +141,8 @@ class Pawn(pygame.sprite.Sprite):
             self.health = 0
             self.alive = False
         if self in enemies_group:
+            global count_kill
+            count_kill += 1
             self.kill()
             Coin(self.hitbox.center, coins_group)
 
@@ -198,6 +204,11 @@ class Player(Pawn):  # игрок
         direction = pygame.mouse.get_pos() - vec_pos
         radius, angle = direction.as_polar()
         return angle
+    
+    def damage(self, amount):
+        super().damage(amount)
+        global count_kill
+        self._db.update_kill(count_kill, self.nick)
 
     def move(self, server_player: list = False):
         super(Player, self).move()
@@ -326,6 +337,7 @@ class Player(Pawn):  # игрок
             super(Player, self).update()
         else:
             self.action_text = 'DEAD'
+            # EndMenu()
 
     def new_perk_add(self, perk):
         perk.use(self)

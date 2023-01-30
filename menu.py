@@ -94,17 +94,42 @@ class StartMenu(Menu):
         self.result = AllTrinkets(self.screen, self._db).run()
 
 
+# class EndMenu(Menu):
+#     def __init__(self, screen: pygame.surface.Surface, money: int):
+#         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
+#         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
+#         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
+#         #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
+#         quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
+#                              onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
+#         label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+#                       font=pygame.font.SysFont('Cascadia Code', 50))
+#         super(EndMenu, self).__init__(quit_button, label)
+
+
 class EndMenu(Menu):
-    def __init__(self, screen: pygame.surface.Surface, money: int):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
+        players = self._db.get_records()
+        labels = []
+        delta = len(players) // 3
         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
         #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
-        quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
-                             onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
-        label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+        records = Label(screen, 100, 30, 100, 50, text=f'RECORDS:', textColour=Menu.BLACK,
                       font=pygame.font.SysFont('Cascadia Code', 50))
-        super(EndMenu, self).__init__(quit_button, label)
+
+        for col in range(len(players)):
+            label = Label(screen, 300, 100 * col + delta, 300, 100, text=f'{col + 1}. {players[col][1]}', textColour=Menu.BLACK,
+                    font=pygame.font.SysFont('Cascadia Code', 20))
+            labels.append(label)
+
+        quit_button = Button(screen, 630, 520, 95, 30, text='Exit', radius=5,
+                             onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
+        # label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+        #               font=pygame.font.SysFont('Cascadia Code', 50))
+        super(EndMenu, self).__init__(quit_button, records, *labels, quit_button)
 
 
 class SettingsMenu(Menu):
@@ -144,7 +169,9 @@ class CreateGame(Menu):
             self.result = Multiplayer(self.screen, self._db).run()
 
     def solo(self):
+        global nick
         if self.nickname.text:
+            nick = ''.join(self.nickname.text)
             self._db.add_nickname(nick)
             self.destroy()
             self.play(False, False, ''.join(self.nickname.text))
@@ -308,7 +335,8 @@ class AllPerks(Menu):
 
     def back(self):
         self.destroy()
-        self.result = StartMenu(self.screen).run()
+        # self.result = StartMenu(self.screen).run()
+        self.result = EndMenu(self.screen, self._db).run()
 
 
 def get_ip_port():
