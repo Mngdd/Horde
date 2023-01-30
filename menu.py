@@ -8,6 +8,9 @@ from pygame_widgets.button import Button
 from pygame_widgets.textbox import TextBox
 from pygame_widgets.widget import WidgetBase
 from bd import *
+import sys
+from PyQt5.QtWidgets import QApplication
+
 
 
 class Label(Button):
@@ -95,16 +98,26 @@ class StartMenu(Menu):
 
 
 class EndMenu(Menu):
-    def __init__(self, screen: pygame.surface.Surface, money: int):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
         #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
+        self._db = db
+        all_players = self._db.get_records()
+        labels = []
+        for row in range(len(all_players)):
+            for col in range(len(all_players)):
+                for player in all_players:
+                    label = Label(screen, 100 * row, 30 * col + 30, 100, 50, text=f'{player}', textColour=Menu.BLACK,
+                            font=pygame.font.SysFont('Cascadia Code', 50))
+                    labels.append(label)
+
         quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
                              onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
-        label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
-                      font=pygame.font.SysFont('Cascadia Code', 50))
-        super(EndMenu, self).__init__(quit_button, label)
+        # label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+        #               font=pygame.font.SysFont('Cascadia Code', 50))
+        super(EndMenu, self).__init__(quit_button, *labels)
 
 
 class SettingsMenu(Menu):
@@ -336,3 +349,4 @@ def get_ip_port():
 
 
 nick = None
+
