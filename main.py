@@ -1,6 +1,7 @@
 import ast
 import os
 import sys
+import time
 from subprocess import Popen
 
 import pygame
@@ -15,7 +16,8 @@ from weapon import *
 
 # прикольно так накидал конечн
 
-DEBUG = True
+DEBUG_START_SOLO = False
+DEBUG_SPAWN_WEAPONS = False
 
 enemy_spawn_event = pygame.USEREVENT + 1
 wave_start_event = pygame.USEREVENT + 2
@@ -171,7 +173,7 @@ class Player(Pawn):  # игрок
         self.available_weapons = []  # все оружия, TODO: добавить кулаки или другое стартовое
         self.equipped_weapon: int = 0  # это держим в руке, это индекс available_weapons. 0 <= i < len(av_weapons)
         self.inventory = []
-        self.money = 0
+        self.money = 10  # чтоб достаточно для минимального оружия
 
         self.left_hand_slot = (0, 5)  # относительная позиция, считать от левого верхнего пикселя
         self.right_hand_slot = (10, 5)
@@ -234,9 +236,7 @@ class Player(Pawn):  # игрок
                     self.available_weapons[self.equipped_weapon].reload()
             if k[pygame.K_q]:
                 if self.equipped_weapon != -1 and self.available_weapons:
-                    print('dropped weapon',  self.available_weapons, self.equipped_weapon)
-                    self.available_weapons.pop(-1)
-                    self.equipped_weapon = -1
+                    self.force_drop_weapon()
 
             if m[0]:  # лкм нажата
                 self.shoot(pygame.mouse.get_pos())
@@ -245,20 +245,33 @@ class Player(Pawn):  # игрок
             for wep in weapons_group:
                 if self.rect.colliderect(wep.rect):
                     if k[pygame.K_e]:
-                        if self.equipped_weapon != -1 and self.available_weapons:
-                            self.available_weapons.pop(-1)
-                            self.equipped_weapon = -1
-                        wep.pick_up(self)
+                        self.pickup_weapon(wep)
                     else:
                         self.action_text = f'PICK UP {wep.name}'
 
         self.collision_test()
+
+    def pickup_weapon(self, weapon):
+        if self.equipped_weapon != -1 and self.available_weapons:
+            self.available_weapons.pop(-1)
+            self.equipped_weapon = -1
+        weapon.pick_up(self)
+
+    def force_drop_weapon(self):
+        print('dropped weapon',  self.available_weapons, self.equipped_weapon)
+        self.available_weapons.pop(-1)
+        self.equipped_weapon = -1
 
     def pick_up_coins(self):
         for coin in coins_group:
             if self.hitbox.collidepoint(*coin.pos):
                 coin.kill()
                 self.money += 1
+
+    def close_shop(self):
+        global shop
+        shop.close_overlay()
+        self.overlay_open = False
 
     def check_shop(self):
         global shop
@@ -267,8 +280,7 @@ class Player(Pawn):  # игрок
                 shop.open_overlay()
                 self.overlay_open = True
         if pygame.key.get_pressed()[pygame.K_ESCAPE] and self.overlay_open:
-            shop.close_overlay()
-            self.overlay_open = False
+            self.close_shop()
 
     def move_frame(self):
         self.timing = time.time()
@@ -503,13 +515,34 @@ class Shop(pygame.sprite.Sprite):  # от спрайта наследовани�
     def __init__(self, x: int, y: int, closed: bool = True):
         super(Shop, self).__init__()
         self.rect = pygame.rect.Rect(x - 32, y - 32, 32 * 3, 32 * 3)  # область 3x3 тайла вокруг
-        self.overlay_widgets = [
-            ScreenDarken(),
-            Button(screen, 600, 500, 70, 30, text='Пистолет 1'),
-            ButtonArray(screen, 60, 40, 500, 400, (3, 7))
-        ]
+        self.overlay_widgets = [ScreenDarken()]
+        for i, weapon_class in enumerate(purchasable_weapons, 1):
+            weapon = weapon_class(-2000, -2000)  # чтобы прочитать атрибуты
+            x = 250
+            width = size[0] - x * 2
+            label_width = 50
+            height = 48
+            y = i * (height + 10)
+            new_btn = Button(screen, x, y, width - label_width, height, text=weapon.name, image=weapon.image,
+                             textHAlign='left', imageHAlign='right', onClick=self.buy(weapon_class, weapon.price))
+            new_label = Label(screen, x + width - label_width, y, label_width, height, text=str(weapon.price),
+                              textColour='grey')
+            self.overlay_widgets.append(new_btn)
+            self.overlay_widgets.append(new_label)
+            weapon.kill()
         if closed:
             self.close_overlay()
+
+    @staticmethod
+    def buy(weapon_class, price: int):
+        def inner():
+            global real_player
+            if real_player.money < price:
+                return
+            real_player.money -= price
+            weapon = weapon_class(*real_player.pos, weapons_group)
+            real_player.pickup_weapon(weapon)
+        return inner
 
     def can_access(self, player: Player):
         return player.rect.colliderect(self.rect)
@@ -543,24 +576,26 @@ def game_loop():
 
     # спаун
     real_player = Player(430, 300, my_nickname, players_group)  # игрк
-    Usp(520, 250, weapons_group)
-    Spas12(520, 300, weapons_group)
-    M16(520, 350, weapons_group)
-    AK47(520, 400, weapons_group)
-    Minigun(520, 450, weapons_group)
-    Awp(520, 500, weapons_group)
+    if DEBUG_SPAWN_WEAPONS:
+        Usp(520, 250, weapons_group)
+        Spas12(520, 300, weapons_group)
+        M16(520, 350, weapons_group)
+        AK47(520, 400, weapons_group)
+        Minigun(520, 450, weapons_group)
+        Awp(520, 500, weapons_group)
     players[real_player.nick] = real_player
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
 
     waves = [2, 6, 14]  # кол-ва противников в волнах
     pause_duration = 20000  # время между волнами
+    next_wave_time = time.time() + pause_duration / 1000
     spawn_rate = 3500  # время между спавнами
     wave_index = 0
     wave_ongoing = False  # идет ли волна. если False, то перерыв
     enemies_to_spawn = 0  # сколько врагов еще заспавнить (из всех спавнпоинтов за 1 раз)
 
-    pygame.time.set_timer(wave_start_event, 1000, 1)  # через секунду начнется волна
+    pygame.time.set_timer(wave_start_event, pause_duration, 1)  # через pause_duration начнется волна
     pygame.time.set_timer(enemy_spawn_event, spawn_rate)  # ивент срабатывает постоянно, но спавн при enemies_to_spawn > 0
 
     while not finish_game:  # игровой процесс, игра останавливается при условии finish_game == True
@@ -616,6 +651,7 @@ def game_loop():
 
         if len(enemies_group) == 0 and enemies_to_spawn <= 0 and wave_ongoing:  # конец волны
             pygame.time.set_timer(wave_start_event, pause_duration, 1)
+            next_wave_time = time.time() + pause_duration / 1000
             wave_index += 1
             if wave_index >= len(waves):
                 finish_game = True
@@ -632,6 +668,9 @@ def game_loop():
         camera_pos.y = real_player.rect.centery - half_y
 
         draw()  # рендерим тут
+        if not wave_ongoing:
+            screen.blit(font.render(f'UNTIL START OF WAVE: {int(next_wave_time - time.time())}', True, (15, 15, 15)), get_screen_cords(5, 5))
+        screen.blit(font.render(f'WAVE {wave_index + 1}/{len(waves)}', True, (15, 15, 15)), get_screen_cords(85, 5))
         pygame_widgets.update(events)  # чтобы интерфейс поверх всего рисовался
 
         pygame.display.flip()
@@ -694,6 +733,8 @@ def draw():
         if real_player.available_weapons else 0
     wep_name = real_player.available_weapons[real_player.equipped_weapon].name \
         if real_player.available_weapons else 'Nothing'
+    # + hud для волн рисуется в game_loop, т.к. там все переменные для этого
+    screen.blit(font.render(f'CANDLES: {real_player.money}', True, (15, 15, 15)), get_screen_cords(5, 85))
     screen.blit(font.render(f'HP: {real_player.health}', True, (15, 15, 15)), get_screen_cords(5, 90))
     screen.blit(font.render(f'{wep_name}  {curr}/{total}', True, (15, 15, 15)), get_screen_cords(75, 90))
     screen.blit(font.render(f'{real_player.action_text}', True, (15, 15, 15)), get_screen_cords(35, 90))
@@ -752,7 +793,7 @@ camera_pos = pygame.math.Vector2(100, 100)
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
 
-    if not DEBUG:
+    if not DEBUG_START_SOLO:
         mp_game, im_a_host, my_nickname, ip_port = StartMenu(screen).run()
     else:
         mp_game, im_a_host, my_nickname, ip_port = False, False, 'debug', None

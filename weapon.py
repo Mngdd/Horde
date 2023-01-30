@@ -353,6 +353,7 @@ class Usp(PistolLikeGun):
         self.name: str = 'USP-S'
         self.rarity = None
         self.cooldown: float = 0.1
+        self.price: int = 10
 
         self.cur_frame = 21
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
@@ -373,6 +374,7 @@ class Spas12(Shotgun):
         self.name: str = 'SPAS-12'
         self.rarity = None
         self.cooldown: float = 0.8
+        self.price: int = 40
 
         self.cur_frame = 73
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
@@ -397,6 +399,7 @@ class M16(BurstGun):
         self.burst_curr = 4
         self.burst_timer: float = 0.3
         self.cooldown: float = 0.025
+        self.price: int = 30
 
         self.cur_frame = 104
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
@@ -418,6 +421,7 @@ class AK47(MachineGun):
         self.rarity = None
         self.cooldown: float = 0.1
         self.can_shoot: bool = True
+        self.price: int = 50
 
         self.cur_frame = 134
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
@@ -439,6 +443,7 @@ class Minigun(MachineGun):
         self.rarity = None
         self.cooldown: float = 0.1
         self.can_shoot: bool = True
+        self.price: int = 100
 
         self.cur_frame = 86
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
@@ -460,12 +465,15 @@ class Awp(PistolLikeGun):
         self.rarity = None
         self.cooldown: float = 2
         self.can_shoot: bool = True
+        self.price: int = 20
 
         self.cur_frame = 95
         self.image = pygame.transform.scale(self.frames[self.cur_frame], Weapon.DRAW_SIZE)
         self.init_sounds()
         self.sounds[Weapon.SHOOT] = self.load_sound('awp_shoot.mp3', 0.3)
         self.sounds[Weapon.RELOAD] = self.load_sound('awp_reload.mp3')
+
+
 # class FreezeGun(Weapon):
 #     # Доделать торможение!!!
 #     def __init__(self, *groups):
@@ -494,3 +502,6 @@ class Awp(PistolLikeGun):
 #             projDir = super().rotate_vector(direction, corner)
 #             # тут кароче надо как-то вызвать уже projectile
 #             bullet = Projectile(user.pos, super().normalize_vector(projDir), 10, 1000, (255, 0, 0), projectiles_group)
+
+
+purchasable_weapons = [Usp, Spas12, M16, AK47, Minigun, Awp]

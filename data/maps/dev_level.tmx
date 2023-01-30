@@ -90,16 +90,16 @@
   </object>
  </objectgroup>
  <objectgroup id="8" name="enemy_spawnpoints">
-  <object id="3" x="768" y="224">
+  <object id="3" x="896" y="96">
    <point/>
   </object>
-  <object id="4" x="768" y="544">
+  <object id="4" x="896" y="576">
    <point/>
   </object>
-  <object id="5" x="128" y="544">
+  <object id="5" x="32" y="576">
    <point/>
   </object>
-  <object id="6" x="96" y="256">
+  <object id="6" x="32" y="96">
    <point/>
   </object>
  </objectgroup>
