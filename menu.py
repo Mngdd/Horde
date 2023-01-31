@@ -43,9 +43,9 @@ class Menu:
             pygame.display.update()
         return self.result
 
-    def play(self, mp, im_a_host, nick, ip_port=None):
+    def play(self, mp, im_a_host, nick, ip_port=None, level='dev_level.tmx'):
         self.destroy()
-        self.result = [mp, im_a_host, nick, ip_port]
+        self.result = [mp, im_a_host, nick, ip_port, level]
 
     def quit(self):
         self.destroy()
@@ -110,6 +110,12 @@ class CreateGame(Menu):
                              onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
         label = Label(screen, 300, 0, 100, 50, text='Start/Join the game...', textColour=Menu.BLACK, font=self.font)
         nick_label = Label(screen, 300, 140, 150, 50, text='Nick:', textColour=Menu.BLACK, font=self.font)
+        level_label = Label(screen, 300, 260, 150, 50, text='Level:', textColour=Menu.BLACK, font=self.font)
+        level1_btn = Button(screen, 340, 300, 30, 30, text='1', radius=5,
+                      onClick=self.select_level('dev_level.tmx'), inactiveColour=Menu.WHITE, font=self.font)
+        level2_btn = Button(screen, 380, 300, 30, 30, text='2', radius=5,
+                            onClick=self.select_level('level2.tmx'), inactiveColour=Menu.WHITE, font=self.font)
+        self.level = 'dev_level.tmx'
         solo = Button(screen, 50, 100, 65, 30, text='Solo', radius=5,
                       onClick=self.solo, inactiveColour=Menu.WHITE, font=self.font)
         mp = Button(screen, 50, 150, 130, 30, text='Multiplayer', radius=5,
@@ -117,19 +123,24 @@ class CreateGame(Menu):
         self.nickname = TextBox(screen, 400, 150, 135, 30, radius=5, inactiveColour=Menu.WHITE, font=self.font)
         if nick is not None:
             self.nickname.setText(nick)
-        super(CreateGame, self).__init__(back_button, solo, mp, self.nickname, label, nick_label)
+        super(CreateGame, self).__init__(back_button, solo, mp, self.nickname, label, nick_label, level_label, level1_btn, level2_btn)
+
+    def select_level(self, level_name: str):
+        def inner():
+            self.level = level_name
+        return inner
 
     def mp(self):
         global nick
         if self.nickname.text:
             nick = ''.join(self.nickname.text)
             self.destroy()
-            self.result = Multiplayer(self.screen).run()
+            self.result = *Multiplayer(self.screen).run(), self.level
 
     def solo(self):
         if self.nickname.text:
             self.destroy()
-            self.play(False, False, ''.join(self.nickname.text))
+            self.play(False, False, ''.join(self.nickname.text), None, self.level)
 
     def back(self):
         self.destroy()

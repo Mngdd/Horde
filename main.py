@@ -795,10 +795,10 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
 
     if not DEBUG_START_SOLO:
-        mp_game, im_a_host, my_nickname, ip_port = StartMenu(screen).run()
+        mp_game, im_a_host, my_nickname, ip_port, level_file = StartMenu(screen).run()
     else:
-        mp_game, im_a_host, my_nickname, ip_port = False, False, 'debug', None
-    print(mp_game, im_a_host, my_nickname, ip_port)
+        mp_game, im_a_host, my_nickname, ip_port, level_file = False, False, 'debug', None, 'dev_level.tmx'
+    print(mp_game, im_a_host, my_nickname, ip_port, level_file)
 
     # mp_game = True  # это сетевая или мультиплеер
     # im_a_host = True  # я хост или че
@@ -809,7 +809,8 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     shop: Shop = None
     game_map = None  # просто чтоб было
     enemy_spawnpoints = None
-    load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
+    print(os.path.join("data/maps/", level_file))
+    load_level(os.path.join("data/maps/", level_file))  # загружаем уровень после того как создали все спрайт-группы
 
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 
