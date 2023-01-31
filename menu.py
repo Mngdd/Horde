@@ -45,9 +45,9 @@ class Menu:
             pygame.display.update()
         return self.result
 
-    def play(self, mp, im_a_host, nick, ip_port=None):
+    def play(self, mp, im_a_host, nick, ip_port=None, level='dev_level.tmx'):
         self.destroy()
-        self.result = [mp, im_a_host, nick, ip_port]
+        self.result = [mp, im_a_host, nick, ip_port, level]
 
     def quit(self):
         self.destroy()
@@ -112,7 +112,7 @@ class EndMenu(Menu):
         self._db = db
         players = self._db.get_records()
         labels = []
-        delta = len(players) // 3
+        delta = 600 // len(players)
         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
@@ -121,7 +121,7 @@ class EndMenu(Menu):
                       font=pygame.font.SysFont('Cascadia Code', 50))
 
         for col in range(len(players)):
-            label = Label(screen, 300, 100 * col + delta, 300, 100, text=f'{col + 1}. {players[col][1]}', textColour=Menu.BLACK,
+            label = Label(screen, 300, delta * col, 300, 100, text=f'{col + 1}. {players[col][1]}', textColour=Menu.BLACK,
                     font=pygame.font.SysFont('Cascadia Code', 20))
             labels.append(label)
 
@@ -151,6 +151,12 @@ class CreateGame(Menu):
                              onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
         label = Label(screen, 300, 0, 100, 50, text='Start/Join the game...', textColour=Menu.BLACK, font=self.font)
         nick_label = Label(screen, 300, 140, 150, 50, text='Nick:', textColour=Menu.BLACK, font=self.font)
+        level_label = Label(screen, 300, 260, 150, 50, text='Level:', textColour=Menu.BLACK, font=self.font)
+        level1_btn = Button(screen, 340, 300, 30, 30, text='1', radius=5,
+                      onClick=self.select_level('dev_level.tmx'), inactiveColour=Menu.WHITE, font=self.font)
+        level2_btn = Button(screen, 380, 300, 30, 30, text='2', radius=5,
+                            onClick=self.select_level('level2.tmx'), inactiveColour=Menu.WHITE, font=self.font)
+        self.level = 'dev_level.tmx'
         solo = Button(screen, 50, 100, 65, 30, text='Solo', radius=5,
                       onClick=self.solo, inactiveColour=Menu.WHITE, font=self.font)
         mp = Button(screen, 50, 150, 130, 30, text='Multiplayer', radius=5,
@@ -158,7 +164,12 @@ class CreateGame(Menu):
         self.nickname = TextBox(screen, 400, 150, 135, 30, radius=5, inactiveColour=Menu.WHITE, font=self.font)
         if nick is not None:
             self.nickname.setText(nick)
-        super(CreateGame, self).__init__(back_button, solo, mp, self.nickname, label, nick_label)
+        super(CreateGame, self).__init__(back_button, solo, mp, self.nickname, label, nick_label, level_label, level1_btn, level2_btn)
+
+    def select_level(self, level_name: str):
+        def inner():
+            self.level = level_name
+        return inner
 
     def mp(self):
         global nick
@@ -166,7 +177,7 @@ class CreateGame(Menu):
             nick = ''.join(self.nickname.text)
             self._db.add_nickname(nick)
             self.destroy()
-            self.result = Multiplayer(self.screen, self._db).run()
+            self.result = *Multiplayer(self.screen).run(), self.level
 
     def solo(self):
         global nick
@@ -174,7 +185,7 @@ class CreateGame(Menu):
             nick = ''.join(self.nickname.text)
             self._db.add_nickname(nick)
             self.destroy()
-            self.play(False, False, ''.join(self.nickname.text))
+            self.play(False, False, ''.join(self.nickname.text), None, self.level)
 
     def back(self):
         self.destroy()
@@ -335,8 +346,8 @@ class AllPerks(Menu):
 
     def back(self):
         self.destroy()
-        # self.result = StartMenu(self.screen).run()
-        self.result = EndMenu(self.screen, self._db).run()
+        self.result = StartMenu(self.screen).run()
+        # self.result = EndMenu(self.screen, self._db).run()
 
 
 def get_ip_port():

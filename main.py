@@ -146,6 +146,7 @@ class Pawn(pygame.sprite.Sprite):
             self.kill()
             Coin(self.hitbox.center, coins_group)
 
+
     def draw_health_bar(self, screen: pygame.Surface, camera_pos: pygame.math.Vector2):
         # для оптимизации можно рисовать это в self.image и перерисовывать, когда меняется здоровье,
         # но тогда придется копировать картинку для каждого
@@ -212,16 +213,13 @@ class Player(Pawn):  # игрок
 
     def move(self, server_player: list = False):
         super(Player, self).move()
-        # camera.dx -= self.tile_width * (self.movement_vector[0] - self.pos[0])
-        # camera.dy -= self.tile_height * (self.movement_vector[1] - self.pos[1])
-        # self.pos = self.movement_vector[0], self.movement_vector[1]
-        # for sprite in players_group:
-        #     camera.apply(sprite)
+
+        k = pygame.key.get_pressed()
+        m = pygame.mouse.get_pressed()
+
         if server_player:
             self.pos = server_player
         else:
-            k = pygame.key.get_pressed()
-            m = pygame.mouse.get_pressed()
             self.curr_state = 'IDLE'
             # TODO: ПЕРЕДЕЛАТЬ РАЗВОРОТ БАШКИ ПОД ПОЗИЦИЮ МЫШКИ
             angle = self.get_player_looking_angle()
@@ -439,8 +437,7 @@ class Tile(pygame.sprite.Sprite):  # просто плитки, никакой �
 class Projectile(pygame.sprite.Sprite):  # пуля сама
     bullet_image_default = pygame.transform.scale(load_image("weapons/bullet1.png"), (8, 8))
 
-    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups, bid=None):
-        global b_id_counter
+    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups, block_return=None):
         # откуда, куда, скорость, сколько длится жизнь пули, цвет
         super().__init__(*groups)
         self.image = Projectile.bullet_image_default
@@ -452,12 +449,11 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
         self.when_created = pygame.time.get_ticks()
         self.damage = damage
         self.enemy_team = enemy_team
-        if bid is None:
-            self.id = b_id_counter  # мега костыль чтобы избежать повтора пуль
-            b_ids.append(self.id)
-            b_id_counter += 1
+        if mp_game:
+            if block_return is None:  # изначально она ваще другое обозначала, но переименовывать лень
+                self.block_return = False  # это крч пулю МОЖНО послать на сервер если фолс, тру - нельзя
         else:
-            self.id = bid
+            self.block_return = block_return
 
     def move(self, time):  # размер экрана и время
         if pygame.time.get_ticks() > self.when_created + self.lifetime:
@@ -491,7 +487,7 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
 
     def get_data(self):
         return {'TYPE': 'B', 'POS': self.pos, 'DMG': self.damage, 'TARG': self.movement_vector,
-                'TIME':self.lifetime, 'ID': self.id}
+                'TIME':self.lifetime, 'ID': self.block_return}
 
 
 class Coin(pygame.sprite.Sprite):
@@ -625,14 +621,14 @@ def game_loop():
             if im_a_host:  # если игрок хостит сервер - он и обрабатывает всю инфу
                 # и посылает через сервер другим пепликсам
                 to_send = [players[nick].get_data() for nick in players]
-                to_send.extend([b.get_data() for b in projectiles_group])
-                to_send.extend([e.get_data() for e in enemies_group])
+                to_send.extend([b.get_data() for b in projectiles_group if not b.get_data()['ID']])
+                to_send.extend([e.get_data() for e in enemies_group])  # TODO: СДЕЛАТЬ АНАЛОГИЧНО ДЛЯ ВРАГОУВ
                 reply = parse_data(send_data(net, 'HOST', to_send))  # отправляем на серв обработанную инфу
                 # print('HOST', reply)
             else:  # игрок - клиент(подключился на чужой сервер)
                 to_send = [real_player.get_data()]  # сюда вписывать то, что отправляем на сервер:
                 # себя и все что с ним связано
-                to_send.extend([b.get_data() for b in projectiles_group])
+                to_send.extend([b.get_data() for b in projectiles_group if not b.get_data()['ID']])
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
             try:  # обновляем инфу об игроках
                 for p_nick in reply[0]:
@@ -643,11 +639,11 @@ def game_loop():
                     if p_nick not in players:
                         players[p_nick] = Player(x, y, p_nick, players_group)  # другой игрк
                     players[p_nick].move([x, y])
-                for bul_data in reply[2]:
-                    print('\t', bul_data)
-                    if bul_data['ID'] not in b_ids:
-                        Projectile(bul_data['POS'], bul_data['TARG'], 5, bul_data['TIME'], bul_data['DMG'], enemies_group,
-                                   projectiles_group, bid=bul_data['ID'])
+                # for bul_data in reply[2]:
+                #     print('\t', bul_data)
+                #     if not bul_data['ID']:
+                #         Projectile(bul_data['POS'], bul_data['TARG'], 5, bul_data['TIME'], bul_data['DMG'], enemies_group,
+                #                    projectiles_group, block_return=True)
 
             except Exception as e:
                 print('MAIN//', e, reply)
@@ -712,9 +708,11 @@ def send_data(net, *data):
 def parse_data(data):
     try:
         d = ast.literal_eval(data)
+        if 'B' in d:
+            return print(d)
         return d
     except Exception as e:
-        print('PARSE//', e)
+        print('PARSE//', e, 'DATA', data)
         exit(-1)  # TODO: убрать потом
 
 
@@ -804,8 +802,7 @@ weapons_group = pygame.sprite.Group()
 coins_group = pygame.sprite.Group()
 font = pygame.font.SysFont('Cascadia Code', 30)
 
-b_ids = []
-b_id_counter = 0
+bullets_to_send = []
 camera_pos = pygame.math.Vector2(100, 100)
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
@@ -826,8 +823,8 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     game_map = None  # просто чтоб было
     enemy_spawnpoints = None
     load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
-    # hero = Player(0, 0, 'popusk', players_group)
-    # camera.update(hero)
+
+
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию
 
     main()

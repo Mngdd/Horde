@@ -68,9 +68,9 @@
 -- INSERT INTO player_perks(player_id, perk_id) VALUES(1, 2);
 -- INSERT INTO player_perks(player_id, perk_id) VALUES(2, 3);
 
-INSERT INTO player_trinkets(player_id, trinket_id) VALUES(1, 1);
-INSERT INTO player_trinkets(player_id, trinket_id) VALUES(2, 1);
-INSERT INTO player_trinkets(player_id, trinket_id) VALUES(2, 2);
+-- INSERT INTO player_trinkets(player_id, trinket_id) VALUES(1, 1);
+-- INSERT INTO player_trinkets(player_id, trinket_id) VALUES(2, 1);
+-- INSERT INTO player_trinkets(player_id, trinket_id) VALUES(2, 2);
 
 -- select * from player
 -- select * from perk
@@ -80,7 +80,12 @@ INSERT INTO player_trinkets(player_id, trinket_id) VALUES(2, 2);
 
 
 
-
+-- DELETE FROM player
 -- INSERT OR REPLACE INTO player(player_id, nickname) VALUES(3, 'testik')
 -- UPDATE player SET count_kill = 10, sum_money = 100 WHERE nickname = 'testik'
 -- SELECT * FROM player
+-- select sum_money FROM player WHERE nickname = 'testik'
+-- SELECT nickname FROM player WHERE player_id = 3
+
+-- SELECT nickname FROM player WHERE player_id = 3
+-- UPDATE player set count_kill = 1 WHERE nickname = 'bghs'
