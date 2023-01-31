@@ -53,7 +53,8 @@ class Server:
 
                     # просто обработка того, что получили. Неинтересно
                     usr = reply.pop(0)
-                    conn.sendall(str.encode(str([self.user_data, self.enemy_data, self.bullets])))
+                    conn.sendall(str.encode(str([self.user_data])))
+
                     # всем рассылаем инфу(координаты)
                     self.enemy_data = []
                     self.bullets = []
@@ -66,11 +67,7 @@ class Server:
                                     if object_data['TYPE'] == 'E':  # враг
                                         self.enemy_data.append(object_data)
                                     else:  # пуля
-                                        if object_data['ID'] not in self.bids:
-                                            self.bullets.append(object_data)
-                                            self.bids.append(object_data['ID'])
-                                        else:
-                                            self.bullets[object_data['ID']] = object_data
+                                        self.bullets[object_data['ID']] = object_data
                                 else:
                                     self.user_data[object_data['NICK']] = object_data
                             if debug:
@@ -85,11 +82,13 @@ class Server:
                                         self.bids.append(reply[0][i]['ID'])
                                     else:
                                         self.bullets[reply[0][i]['ID']] = reply[0][i]
-
                             if debug:
                                 print('CLIENT SENT:', reply[0][0])
                         else:
                             raise Exception('UNEXPECTED USER')
+                        for client_id in clients:
+                            if clients[client_id] != conn:
+                                clients[client_id].send(str.encode(str(['B', self.bullets])))
                         if debug:
                             print('SERVER DATA:', self.user_data, self.enemy_data)
             except Exception as e:
@@ -97,6 +96,7 @@ class Server:
                 break
 
         print("\tConnection Closed")
+        # clients.remove(conn)  # пока не стоит удалять
         conn.close()  # отключаемся
 
     def main(self):
@@ -104,10 +104,13 @@ class Server:
             conn, addr = self.s.accept()  # принимаем чела который заходит
             # conn - сокет, от него получаем и ему посылаем инфу, addr - просто адрес клиента
             print("Connected to: ", addr)
+
+            clients[len(clients) + 1 if clients else 1] = conn
             start_new_thread(self.threaded_client, (conn,))  # параллельный поток для работы с новым юзером
 
 
 if __name__ == "__main__":
+    clients = {}
     locker = threading.Lock()
     debug = False
     mp_server = Server(int(list(open('SERVER_PORT.txt', 'r', encoding='utf-8'))[1].strip()), 2)
