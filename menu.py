@@ -135,7 +135,7 @@ class CreateGame(Menu):
         if self.nickname.text:
             nick = ''.join(self.nickname.text)
             self.destroy()
-            self.result = *Multiplayer(self.screen).run(), self.level
+            self.result = Multiplayer(self.screen).run()
 
     def solo(self):
         if self.nickname.text:

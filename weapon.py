@@ -178,14 +178,14 @@ class Gun(Weapon):
                 # и спрайт-группу
                 self.can_shoot = False
                 self.timer(self.cooldown, self.cooldown_finish)
-                print('SHOOT', self.curr_mag_ammo, self.all_ammo_current)
+                # print('SHOOT', self.curr_mag_ammo, self.all_ammo_current)
                 return list(user.rect.center)[:], super().normalize_vector(angled_direction), 5, self.ammo_lifetime, \
                        random.randrange(*self.damage_range)
         if self.curr_mag_ammo == 0:
             if time.time() - self.noammotiming > 0.5:
                 self.noammotiming = time.time()
                 self.sounds[Weapon.NO_AMMO].play()
-            return print('NO AMMO')
+            # return print('NO AMMO')
 
     def reload(self):
         if self.curr_mag_ammo == self.mag_capacity:
