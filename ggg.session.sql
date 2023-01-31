@@ -60,9 +60,9 @@
 -- INSERT INTO trinket(trinket_id, name_trinket, description_trinket, func_name) VALUES(2, 'вампирисзсм', 'за 15 убитых врагов восстанавливает 10 хп', 'VAMPIRE_1');
 -- INSERT INTO trinket(trinket_id, name_trinket, description_trinket, func_name) VALUES(3, 'ну типа чтоб стрелят быстро', 'темп стрельбы и ударов мили оружием выше', 'FAST_SHOOT_1');
 
--- INSERT INTO player(player_id, nickname, count_kill, sum_money) VALUES(1, 'ultra mega pon:)', 999, 1000);
--- INSERT INTO player(player_id, nickname, count_kill, sum_money) VALUES(2, 'ultra mini pon:(', 0, 0);
--- INSERT INTO player(player_id, nickname, count_kill, sum_money) VALUES(3, 'testik', 10, 10);
+INSERT INTO player(player_id, nickname, count_kill, sum_money) VALUES(1, 'ultra mega pon:)', 999, 1000);
+INSERT INTO player(player_id, nickname, count_kill, sum_money) VALUES(2, 'ultra mini pon:(', 0, 0);
+INSERT INTO player(player_id, nickname, count_kill, sum_money) VALUES(3, 'testik', 10, 10);
 
 -- INSERT INTO player_perks(player_id, perk_id) VALUES(1, 1);
 -- INSERT INTO player_perks(player_id, perk_id) VALUES(1, 2);

@@ -180,7 +180,7 @@ class Player(Pawn):  # игрок
         self.available_weapons = []  # все оружия, TODO: добавить кулаки или другое стартовое
         self.equipped_weapon: int = 0  # это держим в руке, это индекс available_weapons. 0 <= i < len(av_weapons)
         self.inventory = []
-        self.money = 10  # чтоб достаточно для минимального оружия
+        self.money = 100000  # чтоб достаточно для минимального оружия
 
         self.left_hand_slot = (0, 5)  # относительная позиция, считать от левого верхнего пикселя
         self.right_hand_slot = (10, 5)
@@ -213,10 +213,8 @@ class Player(Pawn):  # игрок
 
     def move(self, server_player: list = False):
         super(Player, self).move()
-
         k = pygame.key.get_pressed()
         m = pygame.mouse.get_pressed()
-
         if server_player:
             self.pos = server_player
         else:
@@ -437,7 +435,7 @@ class Tile(pygame.sprite.Sprite):  # просто плитки, никакой �
 class Projectile(pygame.sprite.Sprite):  # пуля сама
     bullet_image_default = pygame.transform.scale(load_image("weapons/bullet1.png"), (8, 8))
 
-    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups, block_return=None):
+    def __init__(self, source, target, speed, lifetime, damage, enemy_team, *groups, blocked=None):
         # откуда, куда, скорость, сколько длится жизнь пули, цвет
         super().__init__(*groups)
         self.image = Projectile.bullet_image_default
@@ -449,11 +447,9 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
         self.when_created = pygame.time.get_ticks()
         self.damage = damage
         self.enemy_team = enemy_team
-        if mp_game:
-            if block_return is None:  # изначально она ваще другое обозначала, но переименовывать лень
-                self.block_return = False  # это крч пулю МОЖНО послать на сервер если фолс, тру - нельзя
-        else:
-            self.block_return = block_return
+        self.blocked = blocked if blocked is not None else False, net.id if mp_game else -1  # КРЧ ТУТ ХРАНЮ ВСЕХ ЮЗЕРОВ
+        # print(self.blocked, '1!!!')
+        # У КОТОРЫХ УЖЕ ЕСТЬ ЭТА ПУЛЯ
 
     def move(self, time):  # размер экрана и время
         if pygame.time.get_ticks() > self.when_created + self.lifetime:
@@ -487,7 +483,7 @@ class Projectile(pygame.sprite.Sprite):  # пуля сама
 
     def get_data(self):
         return {'TYPE': 'B', 'POS': self.pos, 'DMG': self.damage, 'TARG': self.movement_vector,
-                'TIME':self.lifetime, 'ID': self.block_return}
+                'TIME': self.lifetime, 'BLOCKED': self.blocked}
 
 
 class Coin(pygame.sprite.Sprite):
@@ -577,7 +573,7 @@ def find_vector_len(point_a, point_b):  # (x1,y1), (x2,y2)
 
 
 def game_loop():
-    global real_player, camera_pos
+    global real_player, camera_pos, net
     if mp_game:
         net = Network(ip_port)
     exit_condition = False
@@ -600,7 +596,7 @@ def game_loop():
     for i in range(4):
         Wall(300 + 32 * i, 300, walls_group, [], None)
 
-    waves = [2, 6, 14]  # кол-ва противников в волнах
+    waves = [1]  # кол-ва противников в волнах
     pause_duration = 20000  # время между волнами
     next_wave_time = time.time() + pause_duration / 1000
     spawn_rate = 3500  # время между спавнами
@@ -621,16 +617,18 @@ def game_loop():
             if im_a_host:  # если игрок хостит сервер - он и обрабатывает всю инфу
                 # и посылает через сервер другим пепликсам
                 to_send = [players[nick].get_data() for nick in players]
-                to_send.extend([b.get_data() for b in projectiles_group if not b.get_data()['ID']])
-                to_send.extend([e.get_data() for e in enemies_group])  # TODO: СДЕЛАТЬ АНАЛОГИЧНО ДЛЯ ВРАГОУВ
+                to_send.extend([b.get_data() for b in projectiles_group if not b.get_data()['BLOCKED'][0]
+                                and b.get_data()['BLOCKED'][1] != net.id])
+                to_send.extend([e.get_data() for e in enemies_group])
                 reply = parse_data(send_data(net, 'HOST', to_send))  # отправляем на серв обработанную инфу
                 # print('HOST', reply)
             else:  # игрок - клиент(подключился на чужой сервер)
                 to_send = [real_player.get_data()]  # сюда вписывать то, что отправляем на сервер:
                 # себя и все что с ним связано
-                to_send.extend([b.get_data() for b in projectiles_group if not b.get_data()['ID']])
+                to_send.extend([b.get_data() for b in projectiles_group if not b.get_data()['BLOCKED'][0]
+                                and b.get_data()['BLOCKED'][1] != net.id])
                 reply = parse_data(send_data(net, 'CLIENT', to_send))  # отправляем инфу и получаем ответ серва
-            try:  # обновляем инфу об игроках
+            try:  # обновляем инфу
                 for p_nick in reply[0]:
                     # print('\t', reply)
                     if p_nick == real_player.nick:
@@ -639,11 +637,10 @@ def game_loop():
                     if p_nick not in players:
                         players[p_nick] = Player(x, y, p_nick, players_group)  # другой игрк
                     players[p_nick].move([x, y])
-                # for bul_data in reply[2]:
-                #     print('\t', bul_data)
-                #     if not bul_data['ID']:
-                #         Projectile(bul_data['POS'], bul_data['TARG'], 5, bul_data['TIME'], bul_data['DMG'], enemies_group,
-                #                    projectiles_group, block_return=True)
+                for bul_data in reply[2]:
+                    if not bul_data['BLOCKED'][0]:
+                        Projectile(bul_data['POS'], bul_data['TARG'], 5, bul_data['TIME'], bul_data['DMG'],
+                                   enemies_group, projectiles_group, blocked=True)  # пулю не возвращаем
 
             except Exception as e:
                 print('MAIN//', e, reply)
@@ -688,7 +685,7 @@ def game_loop():
 
         pygame.display.flip()
         clock.tick(60)
-    EndMenu(screen, real_player.money).run()
+    EndMenu(screen, Record()).run()
 
 
 def send_data(net, *data):
@@ -708,11 +705,9 @@ def send_data(net, *data):
 def parse_data(data):
     try:
         d = ast.literal_eval(data)
-        if 'B' in d:
-            return print(d)
         return d
     except Exception as e:
-        print('PARSE//', e, 'DATA', data)
+        print('PARSE//', e)
         exit(-1)  # TODO: убрать потом
 
 
@@ -802,16 +797,17 @@ weapons_group = pygame.sprite.Group()
 coins_group = pygame.sprite.Group()
 font = pygame.font.SysFont('Cascadia Code', 30)
 
-bullets_to_send = []
 camera_pos = pygame.math.Vector2(100, 100)
 if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     timeout = 0  # количество пустых ответов от сервера
 
     if not DEBUG_START_SOLO:
-        mp_game, im_a_host, my_nickname, ip_port = StartMenu(screen).run()
+        ppap = StartMenu(screen).run()
+        print(ppap)
+        mp_game, im_a_host, my_nickname, ip_port, level_file = ppap
     else:
-        mp_game, im_a_host, my_nickname, ip_port = False, False, 'debug', None
-    print(mp_game, im_a_host, my_nickname, ip_port)
+        mp_game, im_a_host, my_nickname, ip_port, level_file = False, False, 'debug', None, 'dev_level.tmx'
+    print(mp_game, im_a_host, my_nickname, ip_port, level_file)
 
     # mp_game = True  # это сетевая или мультиплеер
     # im_a_host = True  # я хост или че
@@ -822,7 +818,9 @@ if __name__ == '__main__':  # ./venv/bin/python3 main.py ДЛЯ ЛИНУХА
     shop: Shop = None
     game_map = None  # просто чтоб было
     enemy_spawnpoints = None
-    load_level("data/maps/dev_level.tmx")  # загружаем уровень после того как создали все спрайт-группы
+    print(os.path.join("data/maps/", level_file))
+    load_level(os.path.join("data/maps/", level_file))  # загружаем уровень после того как создали все спрайт-группы
+
 
 
     colliding = [enemies_group, walls_group, players_group]  # группы, которые имеют коллизию

@@ -177,7 +177,7 @@ class CreateGame(Menu):
             nick = ''.join(self.nickname.text)
             self._db.add_nickname(nick)
             self.destroy()
-            self.result = *Multiplayer(self.screen).run(), self.level
+            self.result = Multiplayer(self.screen, self._db).run()
 
     def solo(self):
         global nick
