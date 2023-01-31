@@ -597,7 +597,7 @@ def game_loop():
         Wall(300 + 32 * i, 300, walls_group, [], None)
 
     waves = [1]  # кол-ва противников в волнах
-    pause_duration = 20000  # время между волнами
+    pause_duration = 1000  # время между волнами
     next_wave_time = time.time() + pause_duration / 1000
     spawn_rate = 3500  # время между спавнами
     wave_index = 0
