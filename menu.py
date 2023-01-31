@@ -7,6 +7,7 @@ from pygame_widgets.button import Button
 from pygame_widgets.button import ButtonArray
 from pygame_widgets.textbox import TextBox
 from pygame_widgets.widget import WidgetBase
+from bd import *
 
 
 class Label(Button):
@@ -25,6 +26,7 @@ class Menu:
     font = pygame.font.SysFont('Cascadia Code', 30)
 
     def __init__(self, *widgets: WidgetBase, bg_color=(255, 255, 255)):
+        self._db = Record()
         self.running = False
         self.result = ''
         self.widgets = widgets
@@ -68,28 +70,66 @@ class StartMenu(Menu):
                              onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
         label = Label(screen, 100, 30, 100, 50, text='Horde', textColour=Menu.BLACK,
                       font=pygame.font.SysFont('Cascadia Code', 50))
-        super(StartMenu, self).__init__(play_button, settings_button, quit_button, label)
+        perk_button = Button(screen, 630, 520, 95, 30, text='Perks', radius=5,
+                             onClick=self.show_perks, inactiveColour=Menu.WHITE, font=self.font)
+        trinket_button = Button(screen, 630, 460, 95, 30, text='Trinkets', radius=5,
+                                onClick=self.show_trinkets, inactiveColour=Menu.WHITE, font=self.font)
+        super(StartMenu, self).__init__(
+            play_button, settings_button, quit_button, label, perk_button, trinket_button)
 
     def play_select(self):
         self.destroy()
-        self.result = CreateGame(self.screen).run()
+        self.result = CreateGame(self.screen, self._db).run()
 
     def settings(self):
         self.destroy()
         self.result = SettingsMenu(self.screen).run()
 
+    def show_perks(self):
+        self.destroy()
+        self.result = AllPerks(self.screen, self._db).run()
+
+    def show_trinkets(self):
+        self.destroy()
+        self.result = AllTrinkets(self.screen, self._db).run()
+
+
+# class EndMenu(Menu):
+#     def __init__(self, screen: pygame.surface.Surface, money: int):
+#         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
+#         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
+#         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
+#         #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
+#         quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
+#                              onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
+#         label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+#                       font=pygame.font.SysFont('Cascadia Code', 50))
+#         super(EndMenu, self).__init__(quit_button, label)
+
 
 class EndMenu(Menu):
-    def __init__(self, screen: pygame.surface.Surface, money: int):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
+        players = self._db.get_records()
+        labels = []
+        delta = 600 // len(players)
         # to_main_menu_button = Button(screen, 50, 100, 95, 30, text='Play', radius=5,
         #                      onClick=self.to_main_menu, inactiveColour=Menu.WHITE, font=self.font)
         # settings_button = Button(screen, 50, 150, 135, 30, text='Settings', radius=5,
         #                          onClick=self.settings, inactiveColour=Menu.WHITE, font=self.font)
-        quit_button = Button(screen, 50, 200, 95, 30, text='Exit', radius=5,
-                             onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
-        label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+        records = Label(screen, 100, 30, 100, 50, text=f'RECORDS:', textColour=Menu.BLACK,
                       font=pygame.font.SysFont('Cascadia Code', 50))
-        super(EndMenu, self).__init__(quit_button, label)
+
+        for col in range(len(players)):
+            label = Label(screen, 300, delta * col, 300, 100, text=f'{col + 1}. {players[col][1]}', textColour=Menu.BLACK,
+                    font=pygame.font.SysFont('Cascadia Code', 20))
+            labels.append(label)
+
+        quit_button = Button(screen, 630, 520, 95, 30, text='Exit', radius=5,
+                             onClick=self.quit, inactiveColour=Menu.WHITE, font=self.font)
+        # label = Label(screen, 100, 30, 100, 50, text=f'Денег: {money}', textColour=Menu.BLACK,
+        #               font=pygame.font.SysFont('Cascadia Code', 50))
+        super(EndMenu, self).__init__(quit_button, records, *labels, quit_button)
 
 
 class SettingsMenu(Menu):
@@ -105,7 +145,8 @@ class SettingsMenu(Menu):
 
 
 class CreateGame(Menu):
-    def __init__(self, screen: pygame.surface.Surface):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
         back_button = Button(screen, 50, 250, 65, 30, text='Back', radius=5,
                              onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
         label = Label(screen, 300, 0, 100, 50, text='Start/Join the game...', textColour=Menu.BLACK, font=self.font)
@@ -134,11 +175,15 @@ class CreateGame(Menu):
         global nick
         if self.nickname.text:
             nick = ''.join(self.nickname.text)
+            self._db.add_nickname(nick)
             self.destroy()
-            self.result = Multiplayer(self.screen).run()
+            self.result = Multiplayer(self.screen, self._db).run()
 
     def solo(self):
+        global nick
         if self.nickname.text:
+            nick = ''.join(self.nickname.text)
+            self._db.add_nickname(nick)
             self.destroy()
             self.play(False, False, ''.join(self.nickname.text), None, self.level)
 
@@ -148,7 +193,8 @@ class CreateGame(Menu):
 
 
 class Multiplayer(Menu):  # помогите
-    def __init__(self, screen: pygame.surface.Surface):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
         global nick
         import json
         self.fast_list = json.load(open('FAV_SERVERS.txt', 'r', encoding='utf-8'))
@@ -209,6 +255,99 @@ class Multiplayer(Menu):  # помогите
         if self.fast_list[i] != 'None':
             self.ip.setText(self.fast_list[i].split(':')[0])
             self.port.setText(self.fast_list[i].split(':')[1])
+
+
+
+class AllTrinkets(Menu):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
+        trinkets = self._db.get_trinkets()
+        back_button = Button(screen, 630, 520, 95, 30, text='Back', radius=5,
+                             onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
+        trinkets_lbl = Label(screen, 350, 0, 100, 100, text='Trinkets',
+                             textColour=Menu.BLACK, font=pygame.font.SysFont('Cascadia Code', 50))
+
+        id = Label(screen, 10, 0, 100, 200, text=f'N', textColour=Menu.BLACK,
+                   font=pygame.font.SysFont('Cascadia Code', 28))
+        name = Label(screen, 40, 0, 300, 200, text=f'name', textColour=Menu.BLACK,
+                     font=pygame.font.SysFont('Cascadia Code', 28))
+        description = Label(screen, 260, 0, 350, 200, text=f'description', textColour=Menu.BLACK,
+                            font=pygame.font.SysFont('Cascadia Code', 28))
+
+        trinket1_id = Label(screen, 10, 30, 100, 300, text=f'{trinkets[0][0]}.', textColour=Menu.BLACK,
+                            font=pygame.font.SysFont('Cascadia Code', 24))
+        trinket2_id = Label(screen, 10, 130, 100, 300, text=f'{trinkets[1][0]}.', textColour=Menu.BLACK,
+                            font=pygame.font.SysFont('Cascadia Code', 24))
+        trinket3_id = Label(screen, 10, 230, 100, 300, text=f'{trinkets[2][0]}.', textColour=Menu.BLACK,
+                            font=pygame.font.SysFont('Cascadia Code', 24))
+
+        trinket1_name = Label(screen, 40, 30, 330, 300, text=f'{trinkets[0][1]}', textColour=Menu.BLACK,
+                              font=pygame.font.SysFont('Cascadia Code', 24))
+        trinket2_name = Label(screen, 40, 130, 300, 300, text=f'{trinkets[1][1]}', textColour=Menu.BLACK,
+                              font=pygame.font.SysFont('Cascadia Code', 24))
+        trinket3_name = Label(screen, 40, 230, 300, 300, text=f'{trinkets[2][1]}', textColour=Menu.BLACK,
+                              font=pygame.font.SysFont('Cascadia Code', 24))
+
+        trinket1_description = Label(screen, 340, 30, 370, 300, text=f'{trinkets[0][2]}', textColour=Menu.BLACK,
+                                     font=pygame.font.SysFont('Cascadia Code', 24))
+        trinket2_description = Label(screen, 340, 130, 370, 300, text=f'{trinkets[1][2]}', textColour=Menu.BLACK,
+                                     font=pygame.font.SysFont('Cascadia Code', 24))
+        trinket3_description = Label(screen, 340, 230, 370, 300, text=f'{trinkets[2][2]}', textColour=Menu.BLACK,
+                                     font=pygame.font.SysFont('Cascadia Code', 24))
+        super(AllTrinkets, self).__init__(back_button, trinkets_lbl, id, name, description, trinket1_id, trinket2_id, trinket3_id,
+                                          trinket1_name, trinket2_name, trinket3_name, trinket1_description, trinket2_description, trinket3_description)
+
+    def back(self):
+        self.destroy()
+        self.result = StartMenu(self.screen).run()
+
+
+class AllPerks(Menu):
+    def __init__(self, screen: pygame.surface.Surface, db: Record):
+        self._db = db
+        perks = self._db.get_perks()
+        useyn_bolt = perks[0][2].split(',')
+        back_button = Button(screen, 630, 520, 95, 30, text='Back', radius=5,
+                             onClick=self.back, inactiveColour=Menu.WHITE, font=self.font)
+        perks_lbl = Label(screen, 350, 0, 100, 100, text='Perks',
+                          textColour=Menu.BLACK, font=pygame.font.SysFont('Cascadia Code', 50))
+
+        id = Label(screen, 10, 0, 200, 200, text=f'N', textColour=Menu.BLACK,
+                   font=pygame.font.SysFont('Cascadia Code', 28))
+        name = Label(screen, 60, 0, 300, 200, text=f'name', textColour=Menu.BLACK,
+                     font=pygame.font.SysFont('Cascadia Code', 28))
+        description = Label(screen, 260, 0, 300, 200, text=f'description', textColour=Menu.BLACK,
+                            font=pygame.font.SysFont('Cascadia Code', 28))
+
+        perk1_id = Label(screen, 10, 30, 200, 300, text=f'{perks[0][0]}.', textColour=Menu.BLACK,
+                         font=pygame.font.SysFont('Cascadia Code', 24))
+        perk2_id = Label(screen, 10, 130, 200, 300, text=f'{perks[1][0]}.', textColour=Menu.BLACK,
+                         font=pygame.font.SysFont('Cascadia Code', 24))
+        perk3_id = Label(screen, 10, 230, 200, 300, text=f'{perks[2][0]}.', textColour=Menu.BLACK,
+                         font=pygame.font.SysFont('Cascadia Code', 24))
+
+        perk1_name = Label(screen, 60, 30, 300, 300, text=f'{perks[0][1]}', textColour=Menu.BLACK,
+                           font=pygame.font.SysFont('Cascadia Code', 24))
+        perk2_name = Label(screen, 60, 130, 300, 300, text=f'{perks[1][1]}', textColour=Menu.BLACK,
+                           font=pygame.font.SysFont('Cascadia Code', 24))
+        perk3_name = Label(screen, 60, 230, 300, 300, text=f'{perks[2][1]}', textColour=Menu.BLACK,
+                           font=pygame.font.SysFont('Cascadia Code', 24))
+
+        perk1_description = Label(screen, 300, 30, 300, 300, text=f'{useyn_bolt[0]}', textColour=Menu.BLACK,
+                                  font=pygame.font.SysFont('Cascadia Code', 24))
+        perk1_description2 = Label(screen, 320, 60, 300, 300, text=f'{useyn_bolt[1]}', textColour=Menu.BLACK,
+                                   font=pygame.font.SysFont('Cascadia Code', 24))
+        perk2_description = Label(screen, 300, 130, 300, 300, text=f'{perks[1][2]}', textColour=Menu.BLACK,
+                                  font=pygame.font.SysFont('Cascadia Code', 24))
+        perk3_description = Label(screen, 300, 230, 300, 300, text=f'{perks[2][2]}', textColour=Menu.BLACK,
+                                  font=pygame.font.SysFont('Cascadia Code', 24))
+        super(AllPerks, self).__init__(back_button, perks_lbl, id, name, description, perk1_id, perk2_id, perk3_id,
+                                       perk1_name, perk2_name, perk3_name, perk1_description, perk1_description2, perk2_description, perk3_description)
+
+    def back(self):
+        self.destroy()
+        self.result = StartMenu(self.screen).run()
+        # self.result = EndMenu(self.screen, self._db).run()
 
 
 def get_ip_port():
